@@ -7,7 +7,8 @@ const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\r/g;
 const AUTH_ERROR_RE =
   /please sign in|authentication required|oauth-callback|launch the cli without arguments to sign in/i;
 
-const STATUS_CACHE_TTL_MS = 120_000;
+const STATUS_CACHE_TTL_MS = 10 * 60_000;
+const MODELS_PROBE_TIMEOUT_MS = 15_000;
 const WORKER_IDLE_TTL_MS = 10 * 60_000;
 const MAX_CACHED_WORKERS = 4;
 const MAX_WORKER_TURNS = 12;
@@ -95,6 +96,55 @@ export function parseModelsOutput(raw) {
   }
 
   return models;
+}
+
+const EFFORT_TIER_ORDER = ['low', 'medium', 'high', 'xhigh'];
+const EFFORT_SUFFIX_RE = /^(.+)-(low|medium|high|xhigh)$/i;
+
+function extractCleanBaseLabel(baseId, rawLabel) {
+  const parenMatch = String(rawLabel || '').match(/^[^(]+\((.+)\)$/);
+  const inner = parenMatch ? parenMatch[1].trim() : baseId;
+  const stripped = inner.replace(/\s*\((low|medium|high|xhigh)\)\s*$/i, '').trim();
+  return stripped || baseId;
+}
+
+/**
+ * Collapse effort-suffixed Antigravity model IDs (e.g. `gemini-4-neon-low/medium/high/xhigh`)
+ * into unique base models with a separate `efforts` list + `variants` map so the UI can pick
+ * Model and Reasoning Effort independently.
+ */
+export function groupModelsByEffort(rawModels = []) {
+  const groups = new Map();
+
+  for (const item of rawModels) {
+    const id = String(item?.id || '').trim();
+    if (!id) continue;
+    const match = id.match(EFFORT_SUFFIX_RE);
+    const baseId = match ? match[1] : id;
+    const tier = match ? match[2].toLowerCase() : null;
+
+    if (!groups.has(baseId)) {
+      groups.set(baseId, {
+        id: baseId,
+        label: extractCleanBaseLabel(baseId, item.label),
+        efforts: [],
+        variants: {},
+      });
+    }
+    const group = groups.get(baseId);
+    if (tier) {
+      group.variants[tier] = id;
+      if (!group.efforts.includes(tier)) {
+        group.efforts.push(tier);
+      }
+    }
+  }
+
+  for (const group of groups.values()) {
+    group.efforts.sort((a, b) => EFFORT_TIER_ORDER.indexOf(a) - EFFORT_TIER_ORDER.indexOf(b));
+  }
+
+  return [...groups.values()];
 }
 
 /**
@@ -283,6 +333,8 @@ export class PersistentAgyWorker {
 
     this.stdoutBuf = '';
     this.stderrBuf = '';
+    this.stderrLog = '';
+    this.lastResultError = '';
     this.activeTurn = null;
 
     const args = [
@@ -335,6 +387,11 @@ export class PersistentAgyWorker {
         }
       },
       onTurnResult: (resObj) => {
+        if (!this.activeTurn && resObj?.status === 'ERROR') {
+          this.lastResultError = String(resObj.error || resObj.response || '').trim();
+          failAll(new Error(this.lastResultError || 'Antigravity worker failed during initialization.'));
+          return;
+        }
         this.#finishTurnFromResult(resObj);
       },
     };
@@ -372,7 +429,9 @@ export class PersistentAgyWorker {
     });
 
     this.child.stderr.on('data', (chunk) => {
-      this.stderrBuf += chunk.toString('utf8');
+      const text = chunk.toString('utf8');
+      this.stderrLog = (this.stderrLog + text).slice(-1600);
+      this.stderrBuf += text;
       const lines = this.stderrBuf.split('\n');
       this.stderrBuf = lines.pop() ?? '';
       for (const line of lines) {
@@ -392,12 +451,10 @@ export class PersistentAgyWorker {
     });
 
     this.child.on('close', (code) => {
-      const stderrTail = stripAnsi(this.stderrBuf).trim().slice(-600);
+      const detail = this.lastResultError || stripAnsi(this.stderrLog || this.stderrBuf).trim().slice(-600);
       failAll(
         new Error(
-          stderrTail
-            ? `agy worker closed (code ${code}): ${stderrTail}`
-            : `agy worker closed unexpectedly (code ${code})`,
+          detail ? `agy worker closed (code ${code}): ${detail}` : `agy worker closed unexpectedly (code ${code})`,
         ),
       );
     });
@@ -548,6 +605,7 @@ export class AntigravityCliAdapter {
     this.statusCache = null;
     this.statusCachedAt = 0;
     this.statusInFlight = null;
+    this.lastKnownModels = [];
 
     this.schemaDirPromise = null;
     this.schemaFiles = new Map();
@@ -565,6 +623,7 @@ export class AntigravityCliAdapter {
       !forceRefresh &&
       this.statusCache &&
       this.statusCache.authenticated &&
+      this.statusCache.models.length > 0 &&
       Date.now() - this.statusCachedAt < STATUS_CACHE_TTL_MS
     ) {
       return this.statusCache;
@@ -614,7 +673,10 @@ export class AntigravityCliAdapter {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        if (result.authenticated) {
+        if (result.models?.length > 0) {
+          this.lastKnownModels = result.models;
+        }
+        if (result.authenticated && result.models?.length > 0) {
           this.statusCache = result;
           this.statusCachedAt = Date.now();
         }
@@ -629,12 +691,15 @@ export class AntigravityCliAdapter {
           label: this.label,
           description: this.description,
           installed: true,
-          authenticated: false,
+          authenticated: this.lastKnownModels.length > 0,
           binaryPath: this.binaryPath,
-          models: [],
-          message: 'Timed out checking Antigravity CLI auth status. Run `agy` in terminal to verify sign-in.',
+          models: this.lastKnownModels,
+          message:
+            this.lastKnownModels.length > 0
+              ? `Ready (${this.lastKnownModels.length} cached models; refresh timed out)`
+              : 'Timed out checking Antigravity CLI auth status. Run `agy` in terminal to verify sign-in.',
         });
-      }, 6000);
+      }, MODELS_PROBE_TIMEOUT_MS);
 
       child.stdout.on('data', (chunk) => {
         stdout += chunk.toString('utf8');
@@ -673,7 +738,9 @@ export class AntigravityCliAdapter {
           return;
         }
 
-        const models = parseModelsOutput(stdout);
+        const parsedRaw = parseModelsOutput(stdout);
+        const grouped = groupModelsByEffort(parsedRaw);
+        const models = grouped.length > 0 ? grouped : this.lastKnownModels;
         finish({
           id: this.id,
           label: this.label,
@@ -691,36 +758,106 @@ export class AntigravityCliAdapter {
     });
   }
 
+  #pickVariantForEffort(group, desiredEffort) {
+    const variants = group?.variants;
+    if (!variants || Object.keys(variants).length === 0) return '';
+    const norm = String(desiredEffort || 'low').toLowerCase();
+    if (variants[norm]) return variants[norm];
+    const fallbacks =
+      norm === 'xhigh'
+        ? ['high', 'medium', 'low']
+        : norm === 'high'
+          ? ['xhigh', 'medium', 'low']
+          : norm === 'medium'
+            ? ['low', 'high', 'xhigh']
+            : ['medium', 'high', 'xhigh'];
+    for (const tier of fallbacks) {
+      if (variants[tier]) return variants[tier];
+    }
+    return Object.values(variants)[0] || '';
+  }
+
   resolveModelAndEffort({ model = '', effort = '' } = {}) {
+    const knownModels = this.statusCache?.models || this.lastKnownModels || [];
+    const byId = new Map(knownModels.map((m) => [m.id, m]));
+    const normEffort = String(effort || '').trim().toLowerCase();
+
     if (model === 'cli-default') {
-      return { modelArg: '', effortArg: effort || '' };
+      return { modelArg: '', effortArg: normEffort };
     }
+
     if (model) {
-      return { modelArg: model, effortArg: effort || 'low' };
+      // Exact match against grouped base model (e.g. `gemini-4-neon` + `effort: 'medium'`)
+      const directGroup = byId.get(model);
+      if (directGroup) {
+        const variant = this.#pickVariantForEffort(directGroup, normEffort || 'low');
+        if (variant) {
+          return { modelArg: variant, effortArg: '' };
+        }
+        return { modelArg: directGroup.id, effortArg: '' };
+      }
+
+      // Legacy suffixed model ID (e.g. `gemini-4-hydrogen-high`): combine with requested effort if group exists
+      const suffixMatch = String(model).match(EFFORT_SUFFIX_RE);
+      if (suffixMatch) {
+        const [, baseId, embeddedTier] = suffixMatch;
+        const parentGroup = byId.get(baseId);
+        if (parentGroup) {
+          const variant = this.#pickVariantForEffort(parentGroup, normEffort || embeddedTier.toLowerCase());
+          if (variant) return { modelArg: variant, effortArg: '' };
+        }
+        // Unknown or uncached suffixed model: pass as-is without `--effort` to avoid conflict
+        return { modelArg: model, effortArg: '' };
+      }
+
+      return {
+        modelArg: model,
+        effortArg: normEffort || 'low',
+      };
     }
-    const availableIds = new Set((this.statusCache?.models || []).map((m) => m.id));
-    let fastModel = '';
-    for (const candidate of ['gemini-3.8-flash-low', 'gemini-3.8-flash-medium', 'gemini-4-argon-low']) {
-      if (availableIds.has(candidate)) {
-        fastModel = candidate;
-        break;
+
+    // Auto Fast default: prefer Gemini 3.8 Flash, then Gemini 4 Argon, paired with chosen effort (default low)
+    for (const candidateBase of ['gemini-3.8-flash', 'gemini-4-argon']) {
+      const group = byId.get(candidateBase);
+      if (group) {
+        const variant = this.#pickVariantForEffort(group, normEffort || 'low');
+        if (variant) return { modelArg: variant, effortArg: '' };
       }
     }
     return {
-      modelArg: fastModel,
-      effortArg: effort || 'low',
+      modelArg: '',
+      effortArg: normEffort || 'low',
     };
   }
 
+  reset() {
+    this.dispose();
+    this.invalidateStatusCache();
+  }
+
   async #getSchemaPath(schema) {
+    const raw = JSON.stringify(schema);
+    const cached = this.schemaFiles.get(raw);
+    if (cached) {
+      try {
+        await fs.access(cached);
+        return cached;
+      } catch {
+        this.schemaFiles.delete(raw);
+      }
+    }
+
     if (!this.schemaDirPromise) {
       this.schemaDirPromise = fs.mkdtemp(path.join(os.tmpdir(), 'resume-tailor-schemas-'));
     }
-    const dir = await this.schemaDirPromise;
-    const raw = JSON.stringify(schema);
-    if (this.schemaFiles.has(raw)) {
-      return this.schemaFiles.get(raw);
+    let dir = await this.schemaDirPromise;
+    try {
+      await fs.access(dir);
+    } catch {
+      this.schemaDirPromise = fs.mkdtemp(path.join(os.tmpdir(), 'resume-tailor-schemas-'));
+      dir = await this.schemaDirPromise;
     }
+
     const filePath = path.join(dir, `schema-${this.schemaFiles.size + 1}.json`);
     await fs.writeFile(filePath, JSON.stringify(schema, null, 2), 'utf8');
     this.schemaFiles.set(raw, filePath);
@@ -1023,6 +1160,7 @@ export class AntigravityCliAdapter {
     this.spareWorkers.clear();
     for (const w of this.sessionWorkers.values()) w.dispose();
     this.sessionWorkers.clear();
+    this.schemaFiles.clear();
     if (this.schemaDirPromise) {
       this.schemaDirPromise
         .then((dir) => fs.rm(dir, { recursive: true, force: true }))

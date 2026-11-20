@@ -257,6 +257,27 @@ export function formatSlotsForPrompt(slots = []) {
   return slots.map((s) => `[${s.id}] (${s.label})\n${s.content}`).join('\n\n');
 }
 
+const STRUCTURAL_ACTION_RE =
+  /\b(remove|delete|drop|hide|omit|cut|strip|eliminate|add|insert|include|create|append|prepend|put|move|reorder|swap|rename|replace|change|edit|update|modify|adjust|tighten|reduce|increase|expand|shrink)\b/i;
+
+const STRUCTURAL_TARGET_RE =
+  /\b(sections?|publications?|education|projects?|work\s+experience|experience\s+(?:item|entry|role|section)|awards?|honors?|honours?|certifications?|references?|coursework|volunteer|leadership|summary\s+section|objective|header|contact\s+info|new\s+item|new\s+entry|new\s+role|new\s+job|new\s+experience|new\s+project|new\s+bullet|an?\s+(?:item|entry|role|job|position|internship|project|bullet)\b|(?:first|second|third|last|one)\s+(?:item|entry|role|job|project|bullet|section)|subheading|heading|title|job\s+title|company\s+name|employer|dates?|location|gpa|degree|school|university|email|phone|github|linkedin|margins?|spacing|font\s*size|layout|preamble|latex)\b/i;
+
+/**
+ * Detect whether a user instruction requires editing the full LaTeX document
+ * (e.g. removing/adding/reordering sections like Publications, adding/removing a
+ * Work Experience or Project entry, adding/deleting bullets, or editing titles/dates/layout)
+ * rather than only rewriting existing bullet text slots.
+ */
+export function needsFullLatexEdit(instruction = '') {
+  const text = String(instruction || '').trim();
+  if (!text) return false;
+  if (/\b(?:full|complete|raw)\s+latex\b|\\section|\\resumeSubheading|\\resumeItem/i.test(text)) {
+    return true;
+  }
+  return STRUCTURAL_ACTION_RE.test(text) && STRUCTURAL_TARGET_RE.test(text);
+}
+
 export function buildTailorPrompt({
   skillDoc,
   masterFilename,
@@ -275,7 +296,8 @@ export function buildTailorPrompt({
 }) {
   const trimmedJd = String(jobDescription || '').trim().slice(0, 14_000);
   const trimmedCustom = String(userPrompt || '').trim();
-  const useSlots = Array.isArray(slots) && slots.length > 0;
+  const fullLatexMode = needsFullLatexEdit(trimmedCustom);
+  const useSlots = !fullLatexMode && Array.isArray(slots) && slots.length > 0;
   const condensedSkill = condenseSkillDoc(skillDoc);
 
   const sections = [
@@ -284,16 +306,15 @@ export function buildTailorPrompt({
     '- Do NOT call any file, shell, or web tools. Everything needed is inline below.',
     '- Return ONLY raw JSON conforming strictly to the JSON Schema (NO markdown fences).',
     ...(unified ? ['- Set `intent: "generate"` and write a brief tailored summary in `reply`.'] : []),
-    '- NEVER invent skills, tools, metrics, employers, titles, or dates absent from the master resume (unless confirmed by the user below). Put missing JD requirements ONLY in `missingKeywords`.',
+    '- NEVER invent skills, tools, metrics, employers, titles, or dates absent from the master resume UNLESS explicitly provided/confirmed by the user below. Put missing JD requirements ONLY in `missingKeywords`.',
     '- Preserve valid LaTeX (`\\%`, `\\&`, `\\$`, `\\#`, `\\_`, `\\textbf{...}`) with single backslashes (keep `\\\\` line breaks in SKILLS). Keep total output strictly to **1 US Letter page**.',
     `- Apply ${polishPasses} writing critique pass(es): strong action verbs, CAR structure, keep every original number/tool, <=~35 words/bullet, no first-person pronouns, no em dashes or \`--\` in prose bullets, no stock buzzwords (spearheaded/leveraged/orchestrated/utilized/synergy).`,
     ...(useSlots
       ? [
           '- OPTIMIZED SLOT OUTPUT: Return ONLY changed `[id]` items in `slots: [{id, latex}]` and leave `tailoredLatex: ""`. Preamble, contact info, Education, Publications, dates, and employers stay locked automatically.',
-          '- Only use `tailoredLatex` if the user explicitly requested structural changes outside those slots.',
         ]
       : [
-          '- Output complete valid LaTeX in `tailoredLatex` (`\\documentclass` to `\\end{document}`), preserving `\\input{glyphtounicode}` and `\\pdfgentounicode=1`.',
+          '- FULL LATEX OUTPUT: Output the COMPLETE valid LaTeX document in `tailoredLatex` (`\\documentclass` to `\\end{document}`, and set `slots: []`), preserving the preamble, macros, `\\input{glyphtounicode}`, `\\pdfgentounicode=1`, and applying any structural changes (sections/roles/entries/bullets) requested by the user while fitting strictly on 1 page.',
         ]),
     ...buildCompanyTitleRequirements({ masterFilename, companyHint, jobTitleHint, companyManual, jobTitleManual }),
   ];
@@ -398,16 +419,18 @@ export function buildFeedbackPrompt({
   polishPasses = 1,
 }) {
   const trimmedJd = String(jobDescription || '').trim().slice(0, 12_000);
-  const useSlots = Array.isArray(slots) && slots.length > 0;
+  const fullLatexMode = needsFullLatexEdit(feedback);
+  const useSlots = !fullLatexMode && Array.isArray(slots) && slots.length > 0;
   const condensedSkill = condenseSkillDoc(skillDoc);
 
   const sections = [
-    'Revise the tailored resume from user feedback while keeping strictly 1 page and zero fabricated facts.',
+    'Revise the tailored resume from user feedback while keeping strictly 1 page and zero unrequested fabrication.',
     '- Do NOT call tools; return ONLY raw JSON.',
+    '- Include any new experience, role, project, or details explicitly provided by the user.',
     `- Apply ${polishPasses} writing critique pass(es) on changed lines (CAR, <=~35 words, no buzzwords, valid LaTeX single backslashes).`,
     ...(useSlots
-      ? ['- Return ONLY modified `[id]` slots in `slots` (leave `tailoredLatex: ""`, or set `tailoredLatex` only if structural section edits are needed).']
-      : ['- Return complete revised LaTeX in `tailoredLatex`.']),
+      ? ['- Return ONLY modified `[id]` slots in `slots` (leave `tailoredLatex: ""`).']
+      : ['- FULL LATEX OUTPUT: Return the COMPLETE revised valid 1-page LaTeX document (`\\documentclass` to `\\end{document}`) in `tailoredLatex` and set `slots: []`. Apply all requested structural changes (adding/removing/reordering sections, roles, projects, or bullets) cleanly using the existing template macros.']),
     `\n=== TARGET ROLE ===\nCompany: ${companyName || 'Target Company'} | Job Title: ${jobTitle || 'Target Role'} | Master: ${masterFilename}`,
     '\n=== USER FEEDBACK ===\n' + String(feedback || '').trim(),
   ];
@@ -444,24 +467,33 @@ export function buildChatPrompt({
   polishPasses = 1,
   sessionSeeded = false,
 }) {
-  const useSlots = Array.isArray(slots) && slots.length > 0;
+  const fullLatexMode = needsFullLatexEdit(userMessage);
+  const useSlots = !fullLatexMode && Array.isArray(slots) && slots.length > 0;
+  const activeLatexSource = (hasDraft && currentLatex ? currentLatex : masterLatex).trim();
   const recentHistory = (Array.isArray(history) ? history : [])
-    .slice(-6)
-    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${String(m.text || '').trim().slice(0, 800)}`)
+    .slice(fullLatexMode ? -10 : -6)
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${String(m.text || '').trim().slice(0, fullLatexMode ? 1500 : 800)}`)
     .filter(Boolean);
 
   // Fast delta prompt when reusing the already-seeded hot worker for the same job
   if (sessionSeeded) {
     const deltaSections = [
       'Continue this resume session:',
-      '- Choose `intent`: `"qa"` (questions/advice/cover letter/outreach — no PDF edit, set `slots: []`, `tailoredLatex: ""`), `"edit"` (modify current draft), or `"generate"` (rebuild from scratch).',
-      '- NEVER fabricate skills/metrics absent from master unless confirmed by the user.',
+      '- Choose `intent`: `"qa"` (questions/advice/cover letter/outreach — no PDF edit, set `slots: []`, `tailoredLatex: ""`), `"edit"` (modify current draft), or `"generate"` (rebuild from scratch or when no draft exists yet).',
+      '- NEVER invent facts/skills absent from master UNLESS explicitly provided or confirmed by the user in this conversation (e.g. a new role, project, or details the user asked you to add).',
       ...(useSlots
-        ? ['- For edits, return ONLY changed `[id]` slots in `slots` (leave `tailoredLatex: ""`) unless structural/section changes outside slots are requested. Keep strictly 1 page and single LaTeX backslashes.']
-        : ['- For edits/generate, return complete valid 1-page LaTeX in `tailoredLatex`.']),
+        ? ['- For edits, return ONLY changed `[id]` slots in `slots` (leave `tailoredLatex: ""`). Keep strictly 1 page and single LaTeX backslashes.']
+        : [
+            '- FULL LATEX EDIT MODE: The complete current LaTeX document is provided below so you can directly perform structural edits (removing/adding/reordering sections like Publications, adding/removing Work Experience or Project entries, adding/deleting bullets, or editing titles/dates/layout).',
+            '- When the user is asking to apply changes, set `intent: "' + (hasDraft ? 'edit' : 'generate') + '"` (do NOT refuse or tell them to edit manually!), return the COMPLETE valid 1-page LaTeX document (`\\documentclass` to `\\end{document}`) in `tailoredLatex`, and set `slots: []`. Preserve all untouched preamble, macros, and contact header.',
+          ]),
       userMessage ? `\n=== USER MESSAGE ===\n${String(userMessage).trim()}` : '',
     ];
-    if (useSlots && hasDraft) {
+    if (fullLatexMode && activeLatexSource) {
+      deltaSections.push(
+        `\n=== FULL ${hasDraft ? 'CURRENT LATEX DRAFT' : `MASTER RESUME (${masterFilename})`} ===\n\`\`\`latex\n${activeLatexSource}\n\`\`\``,
+      );
+    } else if (useSlots && hasDraft) {
       deltaSections.push('\n=== CURRENT DRAFT SLOTS (for ID reference) ===\n' + formatSlotsForPrompt(slots));
     }
     return deltaSections.filter(Boolean).join('\n');
@@ -475,16 +507,19 @@ export function buildChatPrompt({
     'INTENT ROUTING (CHOOSE ONE `intent`):',
     '1. `"qa"` — Questions, gap analysis, cover letter, outreach DM, interview prep (no PDF edit). Set `slots: []`, `tailoredLatex: ""`, full answer in `reply`.',
     hasDraft
-      ? '2. `"edit"` — Modify, shorten, reorder, or fix the current draft (keep 1 page & grounded facts; summarize changes in `reply`).'
-      : '2. `"generate"` — No draft exists yet; generate a 1-page tailored resume from master (summarize in `reply`).',
+      ? '2. `"edit"` — Modify, shorten, add/remove sections or entries, reorder, or fix the current draft (keep 1 page; summarize changes in `reply`).'
+      : '2. `"generate"` — No draft exists yet; generate a 1-page tailored resume from master with all requested changes (summarize in `reply`).',
     ...(hasDraft ? ['3. `"generate"` — Only if user asks to start fresh or switch master resume.'] : []),
     '',
     'RULES:',
     '- No external tool calls; return ONLY raw JSON matching schema.',
-    '- Never fabricate facts/metrics/skills missing from master (unless user confirms).',
+    '- Never fabricate facts/metrics/skills missing from master UNLESS explicitly provided or confirmed by the user in this conversation.',
     ...(useSlots
-      ? ['- For `"edit"`/`"generate"`, prefer compact `slots: [{id, latex}]` (leave `tailoredLatex: ""`) with single LaTeX backslashes; use `tailoredLatex` only for structural section changes outside slots.']
-      : ['- For `"edit"`/`"generate"`, output complete valid 1-page LaTeX in `tailoredLatex`.']),
+      ? ['- For `"edit"`/`"generate"`, prefer compact `slots: [{id, latex}]` (leave `tailoredLatex: ""`) with single LaTeX backslashes.']
+      : [
+          '- FULL LATEX EDIT MODE: The complete LaTeX source is provided below so you can directly perform structural edits (removing/adding/reordering sections like Publications, adding/removing Work Experience or Project entries, adding/deleting bullets, or editing titles/dates/layout).',
+          '- For `"edit"`/`"generate"`, output the COMPLETE valid 1-page LaTeX document (`\\documentclass` to `\\end{document}`) in `tailoredLatex` and set `slots: []`. Preserve all untouched preamble, macros, and contact header.',
+        ]),
     `- ${polishPasses} writing critique pass(es) (CAR, <=~35 words/bullet, no buzzwords, valid escapes).`,
     ...buildCompanyTitleRequirements({
       masterFilename,

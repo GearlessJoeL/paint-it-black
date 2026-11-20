@@ -112,6 +112,13 @@ export function createCompanionServer({ config: customConfig, registry: customRe
         return;
       }
 
+      if (req.method === 'POST' && pathname === '/api/reconnect') {
+        const body = await readJsonBody(req);
+        const health = await service.reconnect(body);
+        sendJson(res, 200, health);
+        return;
+      }
+
       if (req.method === 'GET' && pathname === '/api/history') {
         const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 20)));
         const items = await service.listHistory(limit);

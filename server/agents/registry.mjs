@@ -1,12 +1,15 @@
 import { AntigravityCliAdapter } from './antigravity.mjs';
+import { DirectApiAdapter } from './api-key.mjs';
+import { ClaudeCodeCliAdapter } from './claude-code.mjs';
+import { CodexCliAdapter } from './codex.mjs';
 
 /**
- * Pluggable registry for local AI agent adapters.
- * Currently registers Antigravity CLI (`agy`) in WSL; additional local CLI agents
- * (e.g., Claude Code, Codex) can be added by implementing the same adapter contract:
- *   - id, label, description
- *   - async checkStatus()
- *   - async runStructuredPrompt({ prompt, schema, model, effort, cwd, conversationId, signal, onEvent })
+ * Pluggable registry for AI agent adapters.
+ * Registers:
+ *   - antigravity: Local Antigravity CLI (`agy`)
+ *   - claude:      Local Claude Code CLI (`claude`)
+ *   - codex:       Local OpenAI Codex CLI (`codex`)
+ *   - api:         Direct API Key (OpenAI / OpenAI-compatible, Anthropic, Gemini)
  */
 export class AgentRegistry {
   constructor() {
@@ -52,6 +55,17 @@ export class AgentRegistry {
       adapter.dispose?.();
     }
   }
+
+  resetAll() {
+    for (const adapter of this.list()) {
+      if (typeof adapter.reset === 'function') {
+        adapter.reset();
+      } else {
+        adapter.dispose?.();
+        adapter.invalidateStatusCache?.();
+      }
+    }
+  }
 }
 
 export function createDefaultRegistry({ config, env }) {
@@ -60,6 +74,24 @@ export function createDefaultRegistry({ config, env }) {
     new AntigravityCliAdapter({
       binaryPath: config.agyBin,
       env,
+    }),
+  );
+  registry.register(
+    new ClaudeCodeCliAdapter({
+      binaryPath: config.claudeBin,
+      env,
+    }),
+  );
+  registry.register(
+    new CodexCliAdapter({
+      binaryPath: config.codexBin,
+      env,
+    }),
+  );
+  registry.register(
+    new DirectApiAdapter({
+      env,
+      apiDefaults: config.apiDefaults,
     }),
   );
   return registry;

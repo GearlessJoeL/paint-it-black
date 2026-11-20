@@ -314,6 +314,15 @@ export class TailorService {
     return agent.prewarm({ schema: UNIFIED_OUTPUT_SCHEMA, model, effort });
   }
 
+  async reconnect({ agentId = 'antigravity', model = '', effort = '' } = {}) {
+    this.registry.resetAll?.();
+    const health = await this.getHealth({ forceRefresh: true });
+    if (agentId === 'antigravity') {
+      this.warmup({ agentId, model, effort }).catch(() => {});
+    }
+    return health;
+  }
+
   #resolveOutputLatex(baseTex, payload) {
     const rawFull = cleanLatexString(payload?.tailoredLatex);
     if (rawFull) {
@@ -332,6 +341,14 @@ export class TailorService {
     );
   }
 
+  #extractApiConfig(input = {}) {
+    return {
+      provider: input.apiProvider || '',
+      apiKey: input.apiKey || '',
+      baseUrl: input.apiBaseUrl || '',
+    };
+  }
+
   async #invokeAgent({
     agent,
     sessionKey = '',
@@ -339,6 +356,7 @@ export class TailorService {
     fallbackSchema,
     model = '',
     effort = '',
+    apiConfig = {},
     conversationId = '',
     signal,
     emit,
@@ -352,6 +370,7 @@ export class TailorService {
         schema: UNIFIED_OUTPUT_SCHEMA,
         model,
         effort,
+        apiConfig,
         signal,
         onEvent,
       });
@@ -361,6 +380,7 @@ export class TailorService {
       schema: fallbackSchema,
       model,
       effort,
+      apiConfig,
       cwd: this.config.resumeRepoDir,
       conversationId,
       signal,
@@ -463,6 +483,7 @@ export class TailorService {
     sessionKey = '',
     model,
     effort,
+    apiConfig = {},
     conversationId,
     signal,
     emit,
@@ -502,7 +523,9 @@ export class TailorService {
       });
 
       const currentSlots = extractLatexSlots(currentTex).slots;
-      const isSeeded = Boolean(agent.isSessionSeeded?.(sessionKey, { model: model || '', effort: effort || '' }));
+      const isSeeded = Boolean(
+        agent.isSessionSeeded?.(sessionKey, { model: model || '', effort: effort || '', apiConfig }),
+      );
       const repairPrompt = buildRepairPrompt({
         masterLatex,
         previousLatex: currentTex,
@@ -519,6 +542,7 @@ export class TailorService {
         fallbackSchema: REPAIR_OUTPUT_SCHEMA,
         model: model || '',
         effort: effort || '',
+        apiConfig,
         conversationId: conversationId || '',
         signal,
         emit,
@@ -623,6 +647,7 @@ export class TailorService {
       message: `Tailoring resume with ${agent.label} (${polishPasses}-pass writing rubric)...`,
     });
 
+    const apiConfig = this.#extractApiConfig(input);
     const agentResult = await this.#invokeAgent({
       agent,
       sessionKey,
@@ -630,6 +655,7 @@ export class TailorService {
       fallbackSchema: TAILOR_OUTPUT_SCHEMA,
       model: input.model || '',
       effort: input.effort || '',
+      apiConfig,
       signal,
       emit,
       jobId,
@@ -687,6 +713,7 @@ export class TailorService {
       sessionKey,
       model: input.model || '',
       effort: input.effort || '',
+      apiConfig,
       conversationId: agentResult.conversationId || '',
       signal,
       emit,
@@ -904,6 +931,7 @@ export class TailorService {
       message: `Applying feedback with ${agent.label}...`,
     });
 
+    const apiConfig = this.#extractApiConfig(input);
     const agentResult = await this.#invokeAgent({
       agent,
       sessionKey,
@@ -911,6 +939,7 @@ export class TailorService {
       fallbackSchema: mode === 'iterate' ? FEEDBACK_OUTPUT_SCHEMA : TAILOR_OUTPUT_SCHEMA,
       model: input.model || '',
       effort: input.effort || '',
+      apiConfig,
       signal,
       emit,
       jobId,
@@ -936,6 +965,7 @@ export class TailorService {
       sessionKey,
       model: input.model || '',
       effort: input.effort || '',
+      apiConfig,
       conversationId: agentResult.conversationId || '',
       signal,
       emit,
@@ -1098,8 +1128,9 @@ export class TailorService {
     const sessionKey = String(input.sessionKey || folderSlug || sourceUrl || '').trim() || jobId;
     const baseTexForSlots = hasDraft ? currentLatex : masterLatex;
     const activeSlots = extractLatexSlots(baseTexForSlots).slots;
+    const apiConfig = this.#extractApiConfig(input);
     const sessionSeeded = Boolean(
-      agent.isSessionSeeded?.(sessionKey, { model: input.model || '', effort: input.effort || '' }),
+      agent.isSessionSeeded?.(sessionKey, { model: input.model || '', effort: input.effort || '', apiConfig }),
     );
     const polishPasses = input.fastMode === false ? 2 : 1;
 
@@ -1130,6 +1161,7 @@ export class TailorService {
       fallbackSchema: CHAT_OUTPUT_SCHEMA,
       model: input.model || '',
       effort: input.effort || '',
+      apiConfig,
       signal,
       emit,
       jobId,
@@ -1240,6 +1272,7 @@ export class TailorService {
       sessionKey,
       model: input.model || '',
       effort: input.effort || '',
+      apiConfig,
       conversationId: agentResult.conversationId || '',
       signal,
       emit,

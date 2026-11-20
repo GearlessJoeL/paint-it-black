@@ -88,7 +88,8 @@ export function loadConfig(overrides = {}) {
   );
 
   const texliveDirs = discoverTexliveBinDirs();
-  const defaultAgyPath = path.join(home, '.gemini', 'bin', process.platform === 'win32' ? 'agy.exe' : 'agy');
+  const exeExt = process.platform === 'win32' ? '.exe' : '';
+  const defaultAgyPath = path.join(home, '.gemini', 'bin', `agy${exeExt}`);
   const agyBin =
     findFirstExecutable([
       overrides.agyBin,
@@ -100,8 +101,35 @@ export function loadConfig(overrides = {}) {
       whichBinary('agy'),
     ]) || defaultAgyPath;
 
+  const defaultClaudePath = path.join(home, '.local', 'bin', `claude${exeExt}`);
+  const claudeBin =
+    findFirstExecutable([
+      overrides.claudeBin,
+      process.env.CLAUDE_BIN,
+      defaultClaudePath,
+      path.join(home, '.claude', 'local', `claude${exeExt}`),
+      path.join(home, '.npm-global', 'bin', `claude${exeExt}`),
+      '/opt/homebrew/bin/claude',
+      '/usr/local/bin/claude',
+      whichBinary('claude'),
+    ]) || defaultClaudePath;
+
+  const defaultCodexPath = path.join(home, '.local', 'bin', `codex${exeExt}`);
+  const codexBin =
+    findFirstExecutable([
+      overrides.codexBin,
+      process.env.CODEX_BIN,
+      defaultCodexPath,
+      path.join(home, '.npm-global', 'bin', `codex${exeExt}`),
+      '/opt/homebrew/bin/codex',
+      '/usr/local/bin/codex',
+      whichBinary('codex'),
+    ]) || defaultCodexPath;
+
   const extraPathDirs = [
     path.dirname(agyBin),
+    path.dirname(claudeBin),
+    path.dirname(codexBin),
     ...texliveDirs,
     '/opt/homebrew/bin',
     '/usr/local/bin',
@@ -115,6 +143,12 @@ export function loadConfig(overrides = {}) {
     resumeRepoDir,
     revisionsDir,
     agyBin,
+    claudeBin,
+    codexBin,
+    apiDefaults: {
+      provider: overrides.apiProvider || process.env.API_PROVIDER || 'openai',
+      baseUrl: overrides.apiBaseUrl || process.env.API_BASE_URL || '',
+    },
     texliveDirs,
     extraPathDirs,
     maxRepairAttempts: Number(overrides.maxRepairAttempts ?? process.env.MAX_REPAIR_ATTEMPTS ?? 2),

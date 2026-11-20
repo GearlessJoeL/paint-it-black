@@ -11,7 +11,11 @@ const DEFAULT_SETTINGS = {
   serverUrl: 'http://127.0.0.1:8787',
   agentId: 'antigravity',
   model: '',
+  customModel: '',
   effort: 'low',
+  apiProvider: 'openai',
+  apiKey: '',
+  apiBaseUrl: '',
   masterResume: 'auto',
   autoSaveAs: true,
   fastMode: true,
@@ -65,6 +69,7 @@ const state = {
 const els = {
   btnStatusDot: document.getElementById('btn-status-dot'),
   statusShort: document.getElementById('status-short'),
+  btnReconnect: document.getElementById('btn-reconnect'),
   btnOpenHistory: document.getElementById('btn-open-history'),
   btnOpenSettings: document.getElementById('btn-open-settings'),
   alertStrip: document.getElementById('alert-strip'),
@@ -106,6 +111,13 @@ const els = {
   masterRadioContainer: document.getElementById('master-radio-container'),
   agentSelect: document.getElementById('agent-select'),
   modelSelect: document.getElementById('model-select'),
+  apiSettingsGroup: document.getElementById('api-settings-group'),
+  apiProviderSelect: document.getElementById('api-provider-select'),
+  apiKeyInput: document.getElementById('api-key-input'),
+  apiKeyHint: document.getElementById('api-key-hint'),
+  apiBaseUrlLabel: document.getElementById('api-base-url-label'),
+  apiBaseUrlInput: document.getElementById('api-base-url-input'),
+  customModelInput: document.getElementById('custom-model-input'),
   settingEffort: document.getElementById('setting-effort'),
   selectedFolderName: document.getElementById('selected-folder-name'),
   btnPickFolder: document.getElementById('btn-pick-folder'),
@@ -487,17 +499,56 @@ function getCurrentPreviewUrl(result, version = null) {
   return `${baseUrl}/api/tailored/${encodeURIComponent(result.folderSlug)}/pdf`;
 }
 
+function getActiveAgentDisplayName() {
+  const id = state.settings.agentId || 'antigravity';
+  if (id === 'claude') return 'Claude Code';
+  if (id === 'codex') return 'Codex';
+  if (id === 'api') {
+    const p = state.settings.apiProvider || 'openai';
+    if (p === 'openrouter') return 'OpenRouter';
+    if (p === 'local') return 'Local API';
+    if (p === 'anthropic') return 'Anthropic API';
+    if (p === 'gemini') return 'Gemini API';
+    return 'OpenAI API';
+  }
+  return 'Antigravity';
+}
+
+function getEffectiveModel() {
+  if (state.settings.agentId === 'api' && state.settings.customModel?.trim()) {
+    return state.settings.customModel.trim();
+  }
+  return state.settings.model || '';
+}
+
+const EFFORT_LABELS = {
+  low: 'Low (fastest)',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra High',
+};
+
 function renderComposerPills() {
   if (state.folder) {
     els.btnPickFolderInline.textContent = `Folder: ${state.folder.name}`;
   } else {
     els.btnPickFolderInline.textContent = 'Folder: Save As';
   }
-  const modelLabel =
-    state.settings.model === 'cli-default'
+  const agentName = getActiveAgentDisplayName();
+  const effectiveModel = getEffectiveModel();
+  const agyModels = state.health?.agents?.find((a) => a.id === 'antigravity')?.models || [];
+  const matchedAgy = state.settings.agentId === 'antigravity' ? agyModels.find((m) => m.id === effectiveModel) : null;
+  let modelLabel =
+    effectiveModel === 'cli-default'
       ? 'CLI default'
-      : state.settings.model || 'Fast (Flash Low)';
-  els.btnModelInline.textContent = `Model: ${modelLabel}`;
+      : matchedAgy?.label || effectiveModel || (state.settings.agentId === 'antigravity' ? 'Auto Fast' : 'default');
+  if (state.settings.agentId === 'antigravity' && state.settings.effort && effectiveModel !== 'cli-default') {
+    const supportsEffort = !matchedAgy || !Array.isArray(matchedAgy.efforts) || matchedAgy.efforts.length > 0;
+    if (supportsEffort) {
+      modelLabel = `${modelLabel} (${state.settings.effort})`;
+    }
+  }
+  els.btnModelInline.textContent = `${agentName} · ${modelLabel}`;
   els.btnClearChat.hidden = state.messages.length === 0;
 }
 
@@ -520,12 +571,20 @@ function renderFolderState() {
 }
 
 async function loadSettings() {
-  const stored = await chrome.storage.local.get('settings');
+  const stored = await chrome.storage.local.get(['settings', 'cachedHealthAgents']);
   state.settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
+  if (!state.health && Array.isArray(stored.cachedHealthAgents) && stored.cachedHealthAgents.length > 0) {
+    state.health = { agents: stored.cachedHealthAgents };
+    renderAgentsAndModels(stored.cachedHealthAgents);
+  }
   els.autoSaveAs.checked = Boolean(state.settings.autoSaveAs);
   els.settingServerUrl.value = state.settings.serverUrl;
   els.settingEffort.value = state.settings.effort || '';
   els.settingFastMode.checked = Boolean(state.settings.fastMode);
+  els.apiProviderSelect.value = state.settings.apiProvider || 'openai';
+  els.apiKeyInput.value = state.settings.apiKey || '';
+  els.apiBaseUrlInput.value = state.settings.apiBaseUrl || '';
+  els.customModelInput.value = state.settings.customModel || '';
 
   const masterRadio = els.settingsForm.querySelector(
     `input[name="masterResume"][value="${CSS.escape(state.settings.masterResume || 'auto')}"]`,
@@ -581,54 +640,285 @@ function renderMasters(masters = []) {
   }
 }
 
+function updateEffortOptionsForSelection(preferredEffort = els.settingEffort.value || state.settings.effort || 'low') {
+  const agentId = els.agentSelect.value || 'antigravity';
+  const modelId = els.modelSelect.value || '';
+  const agents = state.health?.agents || [];
+  const selectedAgent = agents.find((a) => a.id === agentId);
+
+  els.settingEffort.replaceChildren();
+  els.settingEffort.disabled = false;
+
+  if (agentId === 'antigravity' && modelId !== 'cli-default') {
+    const modelMeta =
+      modelId === ''
+        ? selectedAgent?.models?.find((m) => m.id === 'gemini-3.8-flash') ||
+          selectedAgent?.models?.find((m) => Array.isArray(m.efforts) && m.efforts.length > 0)
+        : selectedAgent?.models?.find((m) => m.id === modelId);
+
+    const efforts = Array.isArray(modelMeta?.efforts) ? modelMeta.efforts : ['low', 'medium', 'high', 'xhigh'];
+
+    if (efforts.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Default (fixed for this model)';
+      els.settingEffort.append(opt);
+      els.settingEffort.value = '';
+      els.settingEffort.disabled = true;
+      return;
+    }
+
+    for (const tier of efforts) {
+      const opt = document.createElement('option');
+      opt.value = tier;
+      opt.textContent =
+        efforts.length === 1 ? `${EFFORT_LABELS[tier] || tier} (only tier)` : EFFORT_LABELS[tier] || tier;
+      els.settingEffort.append(opt);
+    }
+
+    if (preferredEffort && efforts.includes(preferredEffort)) {
+      els.settingEffort.value = preferredEffort;
+    } else {
+      els.settingEffort.value = efforts[0];
+    }
+    return;
+  }
+
+  for (const [val, label] of [
+    ['low', 'Low (fastest)'],
+    ['medium', 'Medium'],
+    ['high', 'High'],
+    ['xhigh', 'Extra High'],
+    ['', 'Auto (default)'],
+  ]) {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = label;
+    els.settingEffort.append(opt);
+  }
+  els.settingEffort.value = [...els.settingEffort.options].some((o) => o.value === preferredEffort)
+    ? preferredEffort
+    : 'low';
+}
+
+function renderModelOptionsForAgent(agentId, preferredModel = '', preferredEffort = state.settings.effort) {
+  const agents = state.health?.agents || [];
+  const selectedAgent = agents.find((a) => a.id === agentId) || agents[0];
+  const isApi = agentId === 'api';
+  els.apiSettingsGroup.hidden = !isApi;
+
+  els.modelSelect.replaceChildren();
+
+  let normalizedModel = preferredModel;
+  let normalizedEffort = preferredEffort;
+
+  if (agentId === 'antigravity') {
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Auto Fast — Gemini 3.8 Flash';
+    els.modelSelect.append(defaultOpt);
+
+    const cliDefaultOpt = document.createElement('option');
+    cliDefaultOpt.value = 'cli-default';
+    cliDefaultOpt.textContent = 'Antigravity CLI default';
+    els.modelSelect.append(cliDefaultOpt);
+
+    for (const model of selectedAgent?.models || []) {
+      const opt = document.createElement('option');
+      opt.value = model.id;
+      opt.textContent = model.label;
+      els.modelSelect.append(opt);
+    }
+
+    // Seamlessly migrate legacy effort-suffixed model IDs (e.g. gemini-4-hydrogen-high -> gemini-4-hydrogen + high)
+    if (normalizedModel && ![...els.modelSelect.options].some((o) => o.value === normalizedModel)) {
+      const m = String(normalizedModel).match(/^(.+)-(low|medium|high|xhigh)$/i);
+      if (m && [...els.modelSelect.options].some((o) => o.value === m[1])) {
+        normalizedModel = m[1];
+        if (!normalizedEffort) normalizedEffort = m[2].toLowerCase();
+      }
+    }
+  } else if (isApi) {
+    const provider = els.apiProviderSelect.value || state.settings.apiProvider || 'openai';
+    const providerMeta = selectedAgent?.providers?.[provider];
+    const providerModels = providerMeta?.models || selectedAgent?.models || [];
+    const envHasKey = Boolean(selectedAgent?.envKeys?.[provider]);
+    const isLocalProvider = provider === 'local';
+    const envVarName = providerMeta?.envVar || `${provider.toUpperCase()}_API_KEY`;
+
+    if (isLocalProvider) {
+      els.apiKeyInput.placeholder = 'Optional (leave blank for Ollama / LM Studio / vLLM)';
+      els.apiKeyHint.textContent =
+        'API key is optional for local OpenAI-compatible servers. Set your local Base URL & model.';
+      els.apiBaseUrlLabel.textContent = 'Local server Base URL';
+      els.apiBaseUrlInput.placeholder = providerMeta?.baseUrl || 'http://127.0.0.1:11434/v1';
+      els.customModelInput.placeholder = 'e.g. qwen2.5:14b or local model ID';
+    } else {
+      els.apiKeyInput.placeholder = envHasKey
+        ? `Using server ${envVarName} (paste to override)`
+        : provider === 'openrouter'
+          ? 'sk-or-v1-… (or set OPENROUTER_API_KEY on server)'
+          : `Paste API key (or set ${envVarName} on server)`;
+      els.apiKeyHint.textContent = envHasKey
+        ? `Server ${envVarName} detected for ${providerMeta?.label || provider}. Leave blank to use it.`
+        : 'Stored locally in Chrome; sent only to your local server and chosen API provider.';
+      els.apiBaseUrlLabel.textContent = 'Base URL (optional)';
+      els.apiBaseUrlInput.placeholder = providerMeta?.baseUrl || 'https://api.openai.com/v1';
+      els.customModelInput.placeholder =
+        provider === 'openrouter'
+          ? 'e.g. anthropic/claude-sonnet-4.5'
+          : `e.g. ${providerMeta?.defaultModel || 'gpt-4o-mini'}`;
+    }
+
+    const defOpt = document.createElement('option');
+    defOpt.value = '';
+    defOpt.textContent = `Provider default (${providerMeta?.defaultModel || 'auto'})`;
+    els.modelSelect.append(defOpt);
+
+    for (const model of providerModels) {
+      const opt = document.createElement('option');
+      opt.value = model.id;
+      opt.textContent = model.label;
+      els.modelSelect.append(opt);
+    }
+  } else {
+    const defOpt = document.createElement('option');
+    defOpt.value = '';
+    defOpt.textContent = agentId === 'claude' ? 'Recommended (sonnet)' : 'CLI default';
+    els.modelSelect.append(defOpt);
+
+    for (const model of selectedAgent?.models || []) {
+      const opt = document.createElement('option');
+      opt.value = model.id;
+      opt.textContent = model.label;
+      els.modelSelect.append(opt);
+    }
+  }
+
+  if (normalizedModel && [...els.modelSelect.options].some((o) => o.value === normalizedModel)) {
+    els.modelSelect.value = normalizedModel;
+  } else {
+    els.modelSelect.value = '';
+  }
+  updateEffortOptionsForSelection(normalizedEffort);
+}
+
 function renderAgentsAndModels(agents = []) {
+  const preserveUiSelection = els.settingsDialog.open;
+  const activeAgentVal = preserveUiSelection ? els.agentSelect.value : state.settings.agentId;
+  const activeModelVal = preserveUiSelection ? els.modelSelect.value : state.settings.model;
+  const activeEffortVal = preserveUiSelection ? els.settingEffort.value : state.settings.effort;
+
   els.agentSelect.replaceChildren();
   for (const agent of agents) {
     const opt = document.createElement('option');
     opt.value = agent.id;
-    opt.textContent = agent.label;
+    const tag = agent.installed === false ? ' (not installed)' : '';
+    opt.textContent = `${agent.label}${tag}`;
     els.agentSelect.append(opt);
   }
-  if (agents.some((a) => a.id === state.settings.agentId)) {
-    els.agentSelect.value = state.settings.agentId;
+  if (agents.some((a) => a.id === activeAgentVal)) {
+    els.agentSelect.value = activeAgentVal;
   }
-
-  const selectedAgent = agents.find((a) => a.id === els.agentSelect.value) || agents[0];
-  els.modelSelect.replaceChildren();
-
-  const defaultOpt = document.createElement('option');
-  defaultOpt.value = '';
-  defaultOpt.textContent = 'Auto Fast — Gemini 3.8 Flash (Low)';
-  els.modelSelect.append(defaultOpt);
-
-  const cliDefaultOpt = document.createElement('option');
-  cliDefaultOpt.value = 'cli-default';
-  cliDefaultOpt.textContent = 'Antigravity CLI default (slower)';
-  els.modelSelect.append(cliDefaultOpt);
-
-  for (const model of selectedAgent?.models || []) {
-    const opt = document.createElement('option');
-    opt.value = model.id;
-    opt.textContent = model.label;
-    els.modelSelect.append(opt);
-  }
-
-  if (state.settings.model && [...els.modelSelect.options].some((o) => o.value === state.settings.model)) {
-    els.modelSelect.value = state.settings.model;
-  }
+  renderModelOptionsForAgent(els.agentSelect.value || 'antigravity', activeModelVal, activeEffortVal);
 }
 
 function triggerServerWarmup() {
+  if ((state.settings.agentId || 'antigravity') !== 'antigravity') return;
   const baseUrl = normalizeServerUrl(state.settings.serverUrl);
   fetch(`${baseUrl}/api/warmup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      agentId: state.settings.agentId || 'antigravity',
+      agentId: 'antigravity',
       model: state.settings.model || '',
       effort: state.settings.effort || '',
     }),
   }).catch(() => {});
+}
+
+async function applyHealthResponse(health) {
+  if (!health) {
+    state.health = null;
+    const envName = isMacClient() ? 'macOS Terminal' : 'WSL';
+    setConnectionStatus(
+      'offline',
+      'Offline',
+      `Companion server offline. Run ./scripts/install-autostart.sh or ./scripts/start-server.sh in ${envName}.`,
+    );
+    return false;
+  }
+
+  state.health = health;
+  els.settingRepoPath.textContent = health.resumeRepoDir || '~/code/resume';
+  if (Array.isArray(health.masters) && health.masters.length > 0) {
+    renderMasters(health.masters);
+  }
+  if (Array.isArray(health.agents) && health.agents.length > 0) {
+    renderAgentsAndModels(health.agents);
+    const agyAgent = health.agents.find((a) => a.id === 'antigravity');
+    if (agyAgent?.models?.length > 0) {
+      await chrome.storage.local.set({ cachedHealthAgents: health.agents }).catch(() => {});
+    }
+  }
+
+  const activeAgent = health.agents?.find((a) => a.id === state.settings.agentId) || health.agents?.[0];
+  const shellHint = isMacClient() || health.platform === 'darwin' ? 'Terminal' : 'WSL';
+  const apiProvider = state.settings.apiProvider || 'openai';
+  const apiProviderMeta = activeAgent?.providers?.[apiProvider];
+  const apiHasLocalEndpoint =
+    apiProvider === 'local' ||
+    /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\]|host\.docker\.internal|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|[^/]+\.local)(:\d+)?(\/|$)/i.test(
+      state.settings.apiBaseUrl || '',
+    );
+  const apiReady =
+    activeAgent?.id === 'api' &&
+    (Boolean(state.settings.apiKey?.trim()) ||
+      Boolean(activeAgent?.envKeys?.[apiProvider]) ||
+      apiHasLocalEndpoint);
+
+  if (!health.latex?.installed) {
+    const installHint =
+      isMacClient() || health.platform === 'darwin'
+        ? 'LaTeX (MacTeX/BasicTeX) not found on macOS.'
+        : 'TeX Live compiler not found in WSL.';
+    setConnectionStatus('offline', 'No TeX', installHint);
+    return false;
+  }
+  if (activeAgent?.id === 'api') {
+    if (apiReady) {
+      setConnectionStatus('ready', 'Ready');
+      return true;
+    }
+    const providerName = apiProviderMeta?.label || apiProvider.toUpperCase();
+    const envVar = apiProviderMeta?.envVar || `${apiProvider.toUpperCase()}_API_KEY`;
+    setConnectionStatus(
+      'auth-needed',
+      'API key',
+      `Open Settings to paste an API key for ${providerName} (or set ${envVar} on the server).`,
+    );
+    return false;
+  }
+  if (!activeAgent?.installed) {
+    setConnectionStatus(
+      'offline',
+      `No ${activeAgent?.id || 'CLI'}`,
+      activeAgent?.message || `${activeAgent?.label || 'AI CLI'} not found in ${shellHint}.`,
+    );
+    return false;
+  }
+  if (!activeAgent?.authenticated) {
+    const loginCmd =
+      activeAgent.id === 'claude' ? 'claude login' : activeAgent.id === 'codex' ? 'codex login' : 'agy';
+    setConnectionStatus(
+      'auth-needed',
+      'Sign in',
+      `Run \`${loginCmd}\` once in ${shellHint} to sign in, then click Reconnect.`,
+    );
+    return false;
+  }
+  setConnectionStatus('ready', 'Ready');
+  return true;
 }
 
 async function checkServerHealth({ allowAutoWake = true, forceRefresh = false } = {}) {
@@ -659,45 +949,67 @@ async function checkServerHealth({ allowAutoWake = true, forceRefresh = false } 
     }
   }
 
-  if (!health) {
-    state.health = null;
-    const envName = isMacClient() ? 'macOS Terminal' : 'WSL';
-    setConnectionStatus(
-      'offline',
-      'Offline',
-      `Companion server offline. Run ./scripts/install-autostart.sh or ./scripts/start-server.sh in ${envName}.`,
-    );
-    return;
-  }
+  return applyHealthResponse(health);
+}
 
-  state.health = health;
-  els.settingRepoPath.textContent = health.resumeRepoDir || '~/code/resume';
-  if (Array.isArray(health.masters) && health.masters.length > 0) {
-    renderMasters(health.masters);
-  }
-  if (Array.isArray(health.agents) && health.agents.length > 0) {
-    renderAgentsAndModels(health.agents);
-  }
+async function reconnectLocalClients({ silent = false } = {}) {
+  const baseUrl = normalizeServerUrl(state.settings.serverUrl);
+  els.btnReconnect.disabled = true;
+  els.btnReconnect.classList.add('is-spinning');
+  setConnectionStatus('checking', 'Reconnecting…');
 
-  const activeAgent = health.agents?.find((a) => a.id === state.settings.agentId) || health.agents?.[0];
-  const shellHint = isMacClient() || health.platform === 'darwin' ? 'Terminal' : 'WSL';
+  const callReconnect = async () => {
+    const res = await fetch(`${baseUrl}/api/reconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId: state.settings.agentId || 'antigravity',
+        model: getEffectiveModel(),
+        effort: state.settings.effort || '',
+      }),
+      cache: 'no-store',
+    });
+    if (res.status === 404) {
+      const fallback = await fetch(`${baseUrl}/api/health?refresh=1`, { cache: 'no-store' });
+      if (!fallback.ok) throw new Error(`HTTP ${fallback.status}`);
+      return fallback.json();
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  };
 
-  if (!health.latex?.installed) {
-    const installHint =
-      isMacClient() || health.platform === 'darwin'
-        ? 'LaTeX (MacTeX/BasicTeX) not found on macOS.'
-        : 'TeX Live compiler not found in WSL.';
-    setConnectionStatus('offline', 'No TeX', installHint);
-  } else if (!activeAgent?.installed) {
-    setConnectionStatus('offline', 'No agy', activeAgent?.message || `Antigravity CLI not found in ${shellHint}.`);
-  } else if (!activeAgent?.authenticated) {
-    setConnectionStatus(
-      'auth-needed',
-      'Sign in',
-      `Run \`agy\` (e.g. ~/.gemini/bin/agy) once in ${shellHint} to sign in with your Google AI Pro plan, then click Retry.`,
-    );
-  } else {
-    setConnectionStatus('ready', 'Ready');
+  let health = null;
+  try {
+    try {
+      health = await callReconnect();
+    } catch {
+      if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(baseUrl)) {
+        setConnectionStatus('checking', 'Waking…');
+        try {
+          const wakeRes = await chrome.runtime.sendMessage({ type: 'ENSURE_SERVER' });
+          if (wakeRes?.ok) {
+            health = await callReconnect();
+          }
+        } catch {
+          // fall through
+        }
+      }
+    }
+
+    const isReady = await applyHealthResponse(health);
+    if (!silent) {
+      if (isReady) {
+        showToast(`Reconnected (${getActiveAgentDisplayName()} ready).`, 'success');
+      } else if (!health) {
+        showToast('Could not reach local companion server.', 'error');
+      } else {
+        showToast(els.alertStripText.textContent || 'Server reachable, but backend needs setup.', 'info');
+      }
+    }
+    return isReady;
+  } finally {
+    els.btnReconnect.disabled = false;
+    els.btnReconnect.classList.remove('is-spinning');
   }
 }
 
@@ -844,18 +1156,20 @@ function scrollChatToBottom() {
 }
 
 function renderEmptyWelcome() {
-  const welcome = document.createElement('div');
-  welcome.className = 'msg msg-assistant';
+  const empty = document.createElement('div');
+  empty.className = 'chat-empty';
 
-  const body = document.createElement('div');
-  body.className = 'msg-body';
-  const p = document.createElement('p');
-  p.textContent =
-    'Click Generate Resume above for a one-click 1-page tailored PDF, or chat below to ask questions about the job, draft a cover letter, or request edits to your resume.';
-  body.append(p);
+  const heading = document.createElement('p');
+  heading.className = 'chat-empty-title';
+  heading.textContent = 'Ready to tailor';
 
-  welcome.append(body);
-  els.chatMessages.replaceChildren(welcome);
+  const body = document.createElement('p');
+  body.className = 'chat-empty-body';
+  body.textContent =
+    'Click Generate Resume above to compile a 1-page PDF for this role, or write below to ask about fit, draft a note, or edit specific bullets.';
+
+  empty.append(heading, body);
+  els.chatMessages.replaceChildren(empty);
 }
 
 function createMessageElement(msg) {
@@ -871,7 +1185,7 @@ function createMessageElement(msg) {
     const header = document.createElement('div');
     header.className = 'msg-header';
     const label = document.createElement('span');
-    label.textContent = 'Antigravity';
+    label.textContent = msg.result?.agentLabel || getActiveAgentDisplayName();
 
     const badge = document.createElement('span');
     badge.className = 'msg-intent';
@@ -895,6 +1209,30 @@ function createMessageElement(msg) {
     gaps.className = 'msg-gaps';
     gaps.textContent = `Gaps (not on master): ${msg.missingKeywords.slice(0, 8).join(', ')}`;
     wrap.append(gaps);
+  }
+
+  if (msg.intent === 'error') {
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'btn btn-secondary btn-xs';
+    retryBtn.textContent = msg.retryAction ? 'Reconnect & Retry' : 'Reconnect';
+    retryBtn.addEventListener('click', async () => {
+      if (state.activeAbortController) return;
+      const ok = await reconnectLocalClients({ silent: Boolean(msg.retryAction) });
+      if (!ok || !msg.retryAction) return;
+      if (msg.retryAction.type === 'generate') {
+        await handleOneClickGenerate();
+      } else if (msg.retryAction.type === 'chat' && msg.retryAction.text) {
+        els.chatInput.value = msg.retryAction.text;
+        await handleChatSubmit(new Event('submit'));
+      }
+    });
+
+    actions.append(retryBtn);
+    wrap.append(actions);
   }
 
   if (msg.result) {
@@ -1074,7 +1412,7 @@ async function ensureServerAwake(baseUrl, progressHandle) {
   }
 }
 
-async function streamEndpoint({ endpoint, requestBody, initialStatus, notifyPopup = false }) {
+async function streamEndpoint({ endpoint, requestBody, initialStatus, notifyPopup = false, retryAction = null }) {
   const mySessionToken = state.sessionToken;
   const baseUrl = normalizeServerUrl(state.settings.serverUrl);
   const progressHandle = appendStreamingPlaceholder(initialStatus);
@@ -1272,6 +1610,7 @@ async function streamEndpoint({ endpoint, requestBody, initialStatus, notifyPopu
         role: 'assistant',
         intent: 'error',
         text: err.message,
+        retryAction,
       });
       renderChatThread();
       await persistActiveSession();
@@ -1305,8 +1644,9 @@ async function handleOneClickGenerate() {
 
   await streamEndpoint({
     endpoint: '/api/tailor',
-    initialStatus: 'Tailoring resume with Antigravity…',
+    initialStatus: `Tailoring resume with ${getActiveAgentDisplayName()}…`,
     notifyPopup: Boolean(state.lastResult),
+    retryAction: { type: 'generate' },
     requestBody: {
       sessionKey: state.sessionKey,
       companyName: els.companyInput.value.trim(),
@@ -1319,8 +1659,11 @@ async function handleOneClickGenerate() {
       userPrompt: '',
       masterResume: state.settings.masterResume || 'auto',
       agentId: state.settings.agentId || 'antigravity',
-      model: state.settings.model || '',
+      model: getEffectiveModel(),
       effort: state.settings.effort || '',
+      apiProvider: state.settings.apiProvider || 'openai',
+      apiKey: state.settings.agentId === 'api' ? state.settings.apiKey || '' : '',
+      apiBaseUrl: state.settings.agentId === 'api' ? state.settings.apiBaseUrl || '' : '',
       fastMode: Boolean(state.settings.fastMode),
     },
   });
@@ -1344,8 +1687,9 @@ async function handleChatSubmit(event) {
 
   await streamEndpoint({
     endpoint: '/api/chat',
-    initialStatus: 'Thinking with Antigravity…',
+    initialStatus: `Thinking with ${getActiveAgentDisplayName()}…`,
     notifyPopup: Boolean(state.lastResult),
+    retryAction: { type: 'chat', text },
     requestBody: {
       sessionKey: state.sessionKey,
       message: text,
@@ -1360,8 +1704,11 @@ async function handleChatSubmit(event) {
       jobDescription: els.jdTextarea.value.trim(),
       masterResume: state.settings.masterResume || 'auto',
       agentId: state.settings.agentId || 'antigravity',
-      model: state.settings.model || '',
+      model: getEffectiveModel(),
       effort: state.settings.effort || '',
+      apiProvider: state.settings.apiProvider || 'openai',
+      apiKey: state.settings.agentId === 'api' ? state.settings.apiKey || '' : '',
+      apiBaseUrl: state.settings.agentId === 'api' ? state.settings.apiBaseUrl || '' : '',
       fastMode: Boolean(state.settings.fastMode),
     },
   });
@@ -1672,10 +2019,13 @@ function wireEvents() {
   installClosedByFallback();
 
   els.btnStatusDot.addEventListener('click', async () => {
-    await checkServerHealth({ forceRefresh: true });
+    await reconnectLocalClients();
+  });
+  els.btnReconnect.addEventListener('click', async () => {
+    await reconnectLocalClients();
   });
   els.btnRetryHealth.addEventListener('click', async () => {
-    await checkServerHealth({ forceRefresh: true });
+    await reconnectLocalClients();
   });
 
   els.btnExtractTab.addEventListener('click', async () => {
@@ -1770,12 +2120,37 @@ function wireEvents() {
     els.settingEffort.value = state.settings.effort || '';
     els.settingFastMode.checked = Boolean(state.settings.fastMode);
     els.autoSaveAs.checked = Boolean(state.settings.autoSaveAs);
+    els.apiProviderSelect.value = state.settings.apiProvider || 'openai';
+    els.apiKeyInput.value = state.settings.apiKey || '';
+    els.apiBaseUrlInput.value = state.settings.apiBaseUrl || '';
+    els.customModelInput.value = state.settings.customModel || '';
+    if ([...els.agentSelect.options].some((o) => o.value === state.settings.agentId)) {
+      els.agentSelect.value = state.settings.agentId;
+    }
+    renderModelOptionsForAgent(els.agentSelect.value || 'antigravity', state.settings.model, state.settings.effort);
     const radio = els.settingsForm.querySelector(
       `input[name="masterResume"][value="${CSS.escape(state.settings.masterResume || 'auto')}"]`,
     );
     if (radio) radio.checked = true;
     els.settingsDialog.showModal();
+
+    const agyHealth = state.health?.agents?.find((a) => a.id === 'antigravity');
+    if (!state.health || !agyHealth?.models?.length) {
+      checkServerHealth({ forceRefresh: true }).catch(() => {});
+    }
   };
+
+  els.agentSelect.addEventListener('change', () => {
+    renderModelOptionsForAgent(els.agentSelect.value, '', els.settingEffort.value || 'low');
+  });
+  els.modelSelect.addEventListener('change', () => {
+    updateEffortOptionsForSelection(els.settingEffort.value || state.settings.effort || 'low');
+  });
+  els.apiProviderSelect.addEventListener('change', () => {
+    // Clear previous provider's Base URL override so we don't send e.g. a local Ollama URL to OpenRouter
+    els.apiBaseUrlInput.value = '';
+    renderModelOptionsForAgent('api', '', els.settingEffort.value || 'low');
+  });
 
   els.btnOpenSettings.addEventListener('click', openSettings);
   els.btnModelInline.addEventListener('click', openSettings);
@@ -1792,12 +2167,17 @@ function wireEvents() {
       masterResume,
       agentId: els.agentSelect.value || 'antigravity',
       model: els.modelSelect.value || '',
+      customModel: els.customModelInput.value.trim(),
       effort: els.settingEffort.value || '',
+      apiProvider: els.apiProviderSelect.value || 'openai',
+      apiKey: els.apiKeyInput.value.trim(),
+      apiBaseUrl: els.apiBaseUrlInput.value.trim().replace(/\/+$/, ''),
       autoSaveAs: els.autoSaveAs.checked,
       fastMode: els.settingFastMode.checked,
     });
     showToast('Settings saved.', 'success');
     await checkServerHealth();
+    triggerServerWarmup();
   });
 
   els.toastDismiss.addEventListener('click', () => hideToast(true));

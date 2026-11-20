@@ -4,21 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <title>Resume Tailor — Local AI</title>
+  <title>Paint It Black — Resume Tailor</title>
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
   <!-- Slim Header -->
   <header class="app-header">
     <div class="brand">
-      <img src="../icons/icon-48.png" alt="" width="20" height="20" class="brand-icon">
-      <h1>Resume Tailor</h1>
+      <img src="../icons/icon-48.png" alt="" width="18" height="18" class="brand-icon">
+      <h1>Paint It Black</h1>
       <button
         type="button"
         id="btn-status-dot"
         class="status-chip"
         data-state="checking"
-        aria-label="Check local companion server and Antigravity status"
+        aria-label="Check local companion server and AI backend status"
       >
         <span class="status-dot" aria-hidden="true"></span>
         <span id="status-short">Checking…</span>
@@ -26,13 +26,19 @@
     </div>
 
     <div class="header-actions">
-      <button type="button" id="btn-open-history" class="icon-btn" aria-label="Recent tailored resumes">
+      <button type="button" id="btn-reconnect" class="icon-btn" title="Reconnect to local server &amp; AI clients" aria-label="Reconnect to local server and AI clients">
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16.5 10a6.5 6.5 0 1 1-1.6-4.27"/>
+          <path d="M16.5 3.75v3.5h-3.5"/>
+        </svg>
+      </button>
+      <button type="button" id="btn-open-history" class="icon-btn" title="Recent tailored resumes" aria-label="Recent tailored resumes">
         <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="10" cy="10" r="7"/>
           <path d="M10 6.5V10l2.5 1.5"/>
         </svg>
       </button>
-      <button type="button" id="btn-open-settings" class="icon-btn" aria-label="Settings">
+      <button type="button" id="btn-open-settings" class="icon-btn" title="Settings" aria-label="Settings">
         <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="10" cy="10" r="2.75"/>
           <path d="M16.2 12.2a1.3 1.3 0 0 0 .26 1.43l.05.05a1.57 1.57 0 1 1-2.22 2.22l-.05-.05a1.3 1.3 0 0 0-1.43-.26 1.3 1.3 0 0 0-.79 1.19v.14a1.57 1.57 0 1 1-3.14 0v-.07a1.3 1.3 0 0 0-.85-1.19 1.3 1.3 0 0 0-1.43.26l-.05.05a1.57 1.57 0 1 1-2.22-2.22l.05-.05a1.3 1.3 0 0 0 .26-1.43 1.3 1.3 0 0 0-1.19-.79h-.14a1.57 1.57 0 1 1 0-3.14h.07a1.3 1.3 0 0 0 1.19-.85 1.3 1.3 0 0 0-.26-1.43l-.05-.05a1.57 1.57 0 1 1 2.22-2.22l.05.05a1.3 1.3 0 0 0 1.43.26h.06a1.3 1.3 0 0 0 .79-1.19v-.14a1.57 1.57 0 1 1 3.14 0v.07a1.3 1.3 0 0 0 .79 1.19 1.3 1.3 0 0 0 1.43-.26l.05-.05a1.57 1.57 0 1 1 2.22 2.22l-.05.05a1.3 1.3 0 0 0-.26 1.43v.06a1.3 1.3 0 0 0 1.19.79h.14a1.57 1.57 0 1 1 0 3.14h-.07a1.3 1.3 0 0 0-1.19.79Z"/>
@@ -44,7 +50,7 @@
   <!-- Only visible when server is offline or Antigravity needs sign-in -->
   <div class="alert-strip" id="alert-strip" role="alert" hidden>
     <p id="alert-strip-text"></p>
-    <button type="button" id="btn-retry-health" class="btn-inline">Retry</button>
+    <button type="button" id="btn-retry-health" class="btn-inline">Reconnect</button>
   </div>
 
   <!-- Compact Job & Primary Action Strip -->
@@ -200,9 +206,12 @@
 
       <div class="field-grid">
         <div class="field">
-          <label for="agent-select">Local AI agent</label>
+          <label for="agent-select">AI backend</label>
           <select id="agent-select" name="agentId">
             <option value="antigravity">Antigravity CLI (agy)</option>
+            <option value="claude">Claude Code CLI (claude)</option>
+            <option value="codex">Codex CLI (codex)</option>
+            <option value="api">Direct API / Local URL</option>
           </select>
         </div>
         <div class="field">
@@ -210,6 +219,57 @@
           <select id="model-select" name="model">
             <option value="">Auto Fast (Flash Low)</option>
           </select>
+        </div>
+      </div>
+
+      <div id="api-settings-group" class="api-settings-group" hidden>
+        <div class="field-grid">
+          <div class="field">
+            <label for="api-provider-select">API provider</label>
+            <select id="api-provider-select" name="apiProvider">
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="local">Local URL (Ollama / LM Studio / vLLM)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="gemini">Google Gemini API</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="custom-model-input">Custom model (optional)</label>
+            <input
+              type="text"
+              id="custom-model-input"
+              name="customModel"
+              placeholder="e.g. gpt-4o-mini"
+              autocorrect="off"
+              autocapitalize="none"
+              spellcheck="false"
+            >
+          </div>
+        </div>
+        <div class="field">
+          <label for="api-key-input">API key</label>
+          <input
+            type="password"
+            id="api-key-input"
+            name="apiKey"
+            placeholder="sk-… (or leave blank to use server env var)"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <p id="api-key-hint" class="field-hint">Stored locally in Chrome; never written to resume archive files.</p>
+        </div>
+        <div class="field">
+          <label for="api-base-url-input" id="api-base-url-label">Base URL (optional)</label>
+          <input
+            type="url"
+            id="api-base-url-input"
+            name="apiBaseUrl"
+            placeholder="Default provider URL"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
         </div>
       </div>
 
