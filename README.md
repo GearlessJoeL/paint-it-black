@@ -1,8 +1,16 @@
 # Paint It Black — Resume Tailor (Chrome Side Panel + Local AI)
 
-> *Inspired by The Rolling Stones' **"Paint It Black"*** — manually tweaking resume details over and over to stand out for each job posting is tedious and draining. This project wipes out that repetitive editing grind so you can turn any job page into an ATS-aligned, compiled **1-page PDF** in one click, and iterate via a fast live chat.
+> *"I see a red door and I want it painted black / No colors anymore, I want them to turn black."* — The Rolling Stones
 
-A Manifest V3 Chrome extension + cross-platform local companion server (supports **Windows via WSL2** and **macOS natively**) that reads the job description from your active browser tab, customizes your LaTeX resume in `~/code/resume/` using your local **Antigravity CLI (`agy`)**, compiles and verifies a strict **1-page PDF** with LaTeX (`pdflatex` / `latexmk`), archives everything locally, and saves `resume-{companyname}-{jobtitle}.pdf` to your chosen folder (with a Save As window).
+## Why "Paint It Black"?
+
+Job hunting turns into an endless loop of rewriting the same LaTeX bullets over and over just to get past ATS filters and stand out — *"I look inside myself and see my heart is black"* every time another 800-word job description opens up.
+
+Worse yet, existing browser extensions (like Simplify) lock basic resume tailoring behind pricey subscriptions. When you already have plenty of AI tokens sitting in your own Antigravity subscription, paying extra for someone else's wrapper makes zero sense. So I uninstalled Simplify, plugged my own local tokens straight into Chrome, and **painted the whole tedious process black** — turning `"Maybe then I'll fade away and not have to face the facts"` of manual resume tweaking into a single click and a fast live chat.
+
+A Manifest V3 Chrome extension + cross-platform local companion server (supports **Windows via WSL2** and **macOS natively**) that reads the job description from your active browser tab, customizes your local LaTeX resume in `~/code/resume/` using your signed-in **Antigravity CLI (`agy`)**, compiles and verifies a strict **1-page PDF** with LaTeX (`pdflatex` / `latexmk`), archives everything locally, and saves `resume-{companyname}-{jobtitle}.pdf` straight to your chosen folder (with a Save As window).
+
+*No subscriptions. No colors anymore. Just open a job tab, click Generate, and ship.*
 
 ## Architecture
 
