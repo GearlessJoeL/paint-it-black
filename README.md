@@ -1,4 +1,4 @@
-# Paint It Black — Resume Tailor (Chrome Side Panel + Local AI)
+# Paint It Black — An AI-Native Resume Tailor (Chrome Side Panel + Local AI Agents)
 
 > *"I see a red door and I want it painted black / No colors anymore, I want them to turn black."* — The Rolling Stones
 
