@@ -1,6 +1,8 @@
-# Resume Tailor — Chrome Side Panel + Local AI (Windows & macOS)
+# Paint It Black — Resume Tailor (Chrome Side Panel + Local AI)
 
-A Manifest V3 Chrome extension + cross-platform local companion server (supports **Windows via WSL2** and **macOS natively**) that reads the job description from your active browser tab, customizes your LaTeX resume in `~/code/resume/` using your local **Antigravity CLI (`agy`)**, compiles and verifies a strict **1-page PDF** with LaTeX (`latexmk` / `pdflatex`), archives everything locally, and saves `resume-{companyname}-{jobtitle}.pdf` to your chosen folder (with a Save As window).
+> *Inspired by The Rolling Stones' **"Paint It Black"*** — manually tweaking resume details over and over to stand out for each job posting is tedious and draining. This project wipes out that repetitive editing grind so you can turn any job page into an ATS-aligned, compiled **1-page PDF** in one click, and iterate via a fast live chat.
+
+A Manifest V3 Chrome extension + cross-platform local companion server (supports **Windows via WSL2** and **macOS natively**) that reads the job description from your active browser tab, customizes your LaTeX resume in `~/code/resume/` using your local **Antigravity CLI (`agy`)**, compiles and verifies a strict **1-page PDF** with LaTeX (`pdflatex` / `latexmk`), archives everything locally, and saves `resume-{companyname}-{jobtitle}.pdf` to your chosen folder (with a Save As window).
 
 ## Architecture
 
@@ -50,7 +52,8 @@ agy models
 Run the same unified installer in **macOS Terminal** or **Windows WSL**:
 
 ```bash
-cd ~/code/resume-tailor-extension
+git clone https://github.com/GearlessJoeL/paint-it-black.git
+cd paint-it-black
 ./scripts/install-autostart.sh
 ```
 
@@ -77,8 +80,8 @@ To remove all auto-start entries cleanly at any time:
 1. Open `chrome://extensions` in Chrome.
 2. Enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked** and select the `extension` directory:
-   - **macOS:** `~/code/resume-tailor-extension/extension` (or wherever you cloned this repo)
-   - **Windows (via WSL):** `\\wsl$\<Distro>\home\<username>\code\resume-tailor-extension\extension` (or `\\wsl.localhost\<Distro>\home\<username>\code\resume-tailor-extension\extension`)
+   - **macOS:** `~/code/paint-it-black/extension` (or wherever you cloned this repo)
+   - **Windows (via WSL):** `\\wsl$\<Distro>\home\<username>\path\to\extension` (or `\\wsl.localhost\<Distro>\home\<username>\path\to\extension`)
 4. Pin **Resume Tailor — Local AI** to your toolbar.
    *(When pulling updates, click **Reload** on the extension card in `chrome://extensions`.)*
 
