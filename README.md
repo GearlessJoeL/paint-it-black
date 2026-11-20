@@ -6,7 +6,7 @@
 
 Job hunting turns into an endless loop of rewriting the same LaTeX bullets over and over just to get past ATS filters and stand out — *"I look inside myself and see my heart is black"* every time another 800-word job description opens up.
 
-Worse yet, existing browser extensions (like Simplify) lock basic resume tailoring behind pricey subscriptions. When you already have plenty of AI tokens sitting in your own Antigravity subscription, paying extra for someone else's wrapper makes zero sense. So I uninstalled Simplify, plugged my own local tokens straight into Chrome, and **painted the whole tedious process black** — turning `"Maybe then I'll fade away and not have to face the facts"` of manual resume tweaking into a single click and a fast live chat.
+Worse yet, existing browser extensions (like Simplify) lock basic resume tailoring behind pricey subscriptions. When you already have plenty of AI tokens sitting in your own Antigravity subscription, paying extra for someone else's wrapper makes zero sense. Inspired by open-source projects like [Resume-Matcher](https://github.com/srbhr/Resume-Matcher), I uninstalled Simplify, plugged my own local tokens and LaTeX workflow straight into Chrome, and **painted the whole tedious process black** — turning `"Maybe then I'll fade away and not have to face the facts"` of manual resume tweaking into a single click and a fast live chat.
 
 A Manifest V3 Chrome extension + cross-platform local companion server (supports **Windows via WSL2** and **macOS natively**) that reads the job description from your active browser tab, customizes your local LaTeX resume in `~/code/resume/` using your signed-in **Antigravity CLI (`agy`)**, compiles and verifies a strict **1-page PDF** with LaTeX (`pdflatex` / `latexmk`), archives everything locally, and saves `resume-{companyname}-{jobtitle}.pdf` straight to your chosen folder (with a Save As window).
 
@@ -134,3 +134,8 @@ All local agents follow the adapter contract in `server/agents/registry.mjs`. Ad
 ```bash
 npm test
 ```
+
+## Inspiration & Credits
+
+- **[srbhr/Resume-Matcher](https://github.com/srbhr/Resume-Matcher)** — early open-source inspiration for local AI-driven ATS keyword matching and resume tailoring.
+- **The Rolling Stones — *"Paint It, Black"*** — for the spirit of erasing repetitive job-application grunt work.
