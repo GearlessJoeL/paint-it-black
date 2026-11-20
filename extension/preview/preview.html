@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Resume Preview — Resume Tailor</title>
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <header class="preview-header">
+    <div class="title-block">
+      <img src="../icons/icon-48.png" alt="" width="22" height="22" class="brand-icon">
+      <div class="title-text">
+        <h1 id="preview-title">Resume Preview</h1>
+        <p class="filename-line">
+          <code id="preview-filename">Waiting for tailored PDF…</code>
+          <span class="pill pill-success" id="preview-page-badge" hidden>1 page</span>
+        </p>
+      </div>
+    </div>
+
+    <div
+      class="preview-toolbar"
+      id="preview-toolbar"
+      role="toolbar"
+      focusgroup="toolbar wrap"
+      aria-label="PDF preview controls"
+      aria-controls="preview-stage"
+    >
+      <div class="toolbar-group" role="group" aria-label="Zoom">
+        <button type="button" id="btn-zoom-out" class="tb-btn" aria-label="Zoom out" title="Zoom out (Ctrl+-)">−</button>
+        <button type="button" id="btn-zoom-fit" class="tb-btn" aria-pressed="true" aria-label="Fit width" title="Fit width (Ctrl+0)">Fit</button>
+        <button type="button" id="btn-zoom-in" class="tb-btn" aria-label="Zoom in" title="Zoom in (Ctrl+=)">+</button>
+      </div>
+
+      <span class="toolbar-sep" role="separator" aria-orientation="vertical"></span>
+
+      <div class="toolbar-group" role="group" aria-label="Document actions">
+        <button type="button" id="btn-save-as" class="tb-btn tb-btn-primary">Save PDF As…</button>
+        <button type="button" id="btn-open-tab" class="tb-btn">Open Tab</button>
+        <button type="button" id="btn-copy-path" class="tb-btn">Copy Path</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sub-header: revision pills, live regenerating state, restore older version -->
+  <section class="subbar" aria-label="Draft status and revisions">
+    <div class="revision-bar" id="revision-bar" role="group" aria-label="Draft revisions" hidden></div>
+    <div class="restore-inline" id="restore-inline" hidden>
+      <span id="restore-text">Viewing older revision</span>
+      <button type="button" id="btn-restore" class="btn-restore">Use as Active</button>
+    </div>
+    <div class="regen-banner" id="regen-banner" hidden>
+      <label for="regen-progress" class="visually-hidden">Regeneration progress</label>
+      <progress id="regen-progress" max="100" value="35"></progress>
+      <span id="regen-message">Regenerating draft from sidebar feedback…</span>
+    </div>
+    <p class="sidebar-hint" id="sidebar-hint">
+      Keep the Chrome side panel open alongside this window to type feedback and regenerate live.
+    </p>
+  </section>
+
+  <main class="preview-main" id="preview-main">
+    <div class="pdf-preview-stage" id="preview-stage">
+      <p class="pdf-placeholder">Generate or select a tailored resume in the Chrome side panel to preview it here.</p>
+    </div>
+  </main>
+
+  <footer class="preview-footer">
+    <details id="notes-details" class="notes-disclosure" hidden>
+      <summary>
+        <span>Keywords &amp; summary of changes</span>
+        <span class="pill" id="notes-pill">Details</span>
+      </summary>
+      <div class="notes-body">
+        <div class="notes-grid">
+          <div>
+            <h2>Matched keywords</h2>
+            <ul id="matched-list" class="tag-list"></ul>
+          </div>
+          <div>
+            <h2>Missing requirements (not fabricated)</h2>
+            <ul id="missing-list" class="tag-list tag-list-warn"></ul>
+          </div>
+        </div>
+        <div id="changes-wrap" hidden>
+          <h2>Summary of changes</h2>
+          <ul id="changes-list" class="bullet-list"></ul>
+        </div>
+      </div>
+    </details>
+  </footer>
+
+  <!-- Action status announcements outside the toolbar -->
+  <p id="toolbar-status" role="status" class="visually-hidden"></p>
+
+  <script type="module" src="preview.js"></script>
+</body>
+</html>

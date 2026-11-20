@@ -1,0 +1,15 @@
+{
+  "name": "resume-tailor-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome Side Panel extension + cross-platform local companion server (Windows WSL & macOS) that tailors LaTeX resumes to job descriptions using local AI agents (Antigravity CLI).",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test server/tests/*.test.mjs",
+    "icons": "python3 scripts/generate-icons.py"
+  }
+}

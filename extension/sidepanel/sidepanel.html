@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Resume Tailor — Local AI</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <!-- Slim Header -->
+  <header class="app-header">
+    <div class="brand">
+      <img src="../icons/icon-48.png" alt="" width="20" height="20" class="brand-icon">
+      <h1>Resume Tailor</h1>
+      <button
+        type="button"
+        id="btn-status-dot"
+        class="status-chip"
+        data-state="checking"
+        aria-label="Check local companion server and Antigravity status"
+      >
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="status-short">Checking…</span>
+      </button>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" id="btn-open-history" class="icon-btn" aria-label="Recent tailored resumes">
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="10" cy="10" r="7"/>
+          <path d="M10 6.5V10l2.5 1.5"/>
+        </svg>
+      </button>
+      <button type="button" id="btn-open-settings" class="icon-btn" aria-label="Settings">
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="10" cy="10" r="2.75"/>
+          <path d="M16.2 12.2a1.3 1.3 0 0 0 .26 1.43l.05.05a1.57 1.57 0 1 1-2.22 2.22l-.05-.05a1.3 1.3 0 0 0-1.43-.26 1.3 1.3 0 0 0-.79 1.19v.14a1.57 1.57 0 1 1-3.14 0v-.07a1.3 1.3 0 0 0-.85-1.19 1.3 1.3 0 0 0-1.43.26l-.05.05a1.57 1.57 0 1 1-2.22-2.22l.05-.05a1.3 1.3 0 0 0 .26-1.43 1.3 1.3 0 0 0-1.19-.79h-.14a1.57 1.57 0 1 1 0-3.14h.07a1.3 1.3 0 0 0 1.19-.85 1.3 1.3 0 0 0-.26-1.43l-.05-.05a1.57 1.57 0 1 1 2.22-2.22l.05.05a1.3 1.3 0 0 0 1.43.26h.06a1.3 1.3 0 0 0 .79-1.19v-.14a1.57 1.57 0 1 1 3.14 0v.07a1.3 1.3 0 0 0 .79 1.19 1.3 1.3 0 0 0 1.43-.26l.05-.05a1.57 1.57 0 1 1 2.22 2.22l-.05.05a1.3 1.3 0 0 0-.26 1.43v.06a1.3 1.3 0 0 0 1.19.79h.14a1.57 1.57 0 1 1 0 3.14h-.07a1.3 1.3 0 0 0-1.19.79Z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Only visible when server is offline or Antigravity needs sign-in -->
+  <div class="alert-strip" id="alert-strip" role="alert" hidden>
+    <p id="alert-strip-text"></p>
+    <button type="button" id="btn-retry-health" class="btn-inline">Retry</button>
+  </div>
+
+  <!-- Compact Job & Primary Action Strip -->
+  <section class="job-strip" aria-label="Target job and actions">
+    <div class="job-summary-row">
+      <div class="job-identity">
+        <p class="job-headline" id="job-headline">No job page detected</p>
+        <p class="job-subline">
+          <code id="filename-preview-text">resume-company-role.pdf</code>
+          <span class="jd-tag" id="jd-count-badge">0 chars</span>
+        </p>
+      </div>
+      <div class="job-mini-actions">
+        <button type="button" id="btn-extract-tab" class="icon-btn icon-btn-sm" aria-label="Re-read job description from active tab">
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16.5 10a6.5 6.5 0 1 1-1.6-4.27"/>
+            <path d="M16.5 3.75v3.5h-3.5"/>
+          </svg>
+        </button>
+        <button type="button" id="btn-toggle-job-edit" class="icon-btn icon-btn-sm" aria-expanded="false" aria-controls="job-editor" aria-label="Edit company, job title, or job description">
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.5 3.5a2.1 2.1 0 0 1 3 3L7 16l-4 1 1-4 9.5-9.5Z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Optional inline job editor (collapsed by default to keep UI minimal) -->
+    <div class="job-editor" id="job-editor" hidden>
+      <div class="field-grid">
+        <div class="field">
+          <label for="company-input">Company</label>
+          <input type="text" id="company-input" name="companyName" placeholder="e.g. Stripe" autocomplete="organization">
+        </div>
+        <div class="field">
+          <label for="job-title-input">Job title</label>
+          <input type="text" id="job-title-input" name="jobTitle" placeholder="e.g. Backend SWE" autocomplete="organization-title">
+        </div>
+      </div>
+      <div class="field">
+        <label for="jd-textarea">Job description</label>
+        <textarea
+          id="jd-textarea"
+          name="jobDescription"
+          rows="4"
+          placeholder="Auto-extracted from the active tab, or paste a job description here…"
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- Single Primary Row: Generate + (when active draft exists) Preview & Save -->
+    <div class="primary-actions">
+      <button type="button" id="btn-generate" class="btn btn-primary">
+        Generate Resume
+      </button>
+      <button type="button" id="btn-open-preview" class="btn btn-secondary" hidden>
+        Preview
+      </button>
+      <button type="button" id="btn-save-pdf" class="btn btn-secondary" hidden>
+        Save PDF
+      </button>
+    </div>
+
+    <!-- Compact revision pills (only shown when > 1 revision or viewing older version) -->
+    <div class="draft-strip" id="draft-strip" hidden>
+      <span class="draft-badge" id="draft-page-badge">1 page</span>
+      <div class="revision-bar" id="revision-bar" role="group" aria-label="Draft revisions"></div>
+      <button type="button" id="btn-restore-revision" class="btn-inline" hidden>Use as Active</button>
+    </div>
+  </section>
+
+  <!-- Main Unified Chat Section (Q&A + Modification/Generation) -->
+  <main class="chat-main" aria-label="Resume assistant chat">
+    <div class="chat-messages" id="chat-messages" tabindex="0"></div>
+
+    <form id="chat-form" class="chat-composer" action="#" method="POST" novalidate>
+      <label for="chat-input" class="visually-hidden">Message Resume Tailor</label>
+      <div class="composer-box">
+        <textarea
+          id="chat-input"
+          name="message"
+          rows="1"
+          placeholder="Ask a question, or describe resume edits…"
+          aria-describedby="composer-hint"
+        ></textarea>
+        <button type="submit" id="btn-send" class="btn-send" aria-label="Send message">
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 16V4"/>
+            <path d="M5 9l5-5 5 5"/>
+          </svg>
+        </button>
+        <button type="button" id="btn-stop" class="btn-send btn-stop" aria-label="Stop current request" hidden>
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
+            <rect x="5" y="5" width="10" height="10" rx="2"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="composer-meta" id="composer-hint">
+        <button type="button" id="btn-pick-folder-inline" class="meta-pill">Folder: Save As</button>
+        <button type="button" id="btn-model-inline" class="meta-pill">Model: Fast</button>
+        <button type="button" id="btn-clear-chat" class="meta-link" hidden>New chat</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- Recent Tailored Resumes Dialog -->
+  <dialog id="history-dialog" class="modal-dialog" closedby="any" aria-labelledby="history-title">
+    <div class="dialog-header">
+      <h2 id="history-title">Recent Tailored Resumes</h2>
+      <form method="dialog">
+        <button type="submit" value="close" formnovalidate class="icon-btn" aria-label="Close recent resumes">
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M5 5l10 10M15 5L5 15"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+    <ul id="history-list" class="history-list">
+      <li class="history-empty">No tailored resumes found yet.</li>
+    </ul>
+  </dialog>
+
+  <!-- Settings Modal Dialog -->
+  <dialog id="settings-dialog" class="modal-dialog" closedby="any" aria-labelledby="settings-title">
+    <form id="settings-form" method="dialog">
+      <div class="dialog-header">
+        <h2 id="settings-title">Settings</h2>
+        <button type="submit" value="cancel" formnovalidate class="icon-btn" aria-label="Close settings">
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M5 5l10 10M15 5L5 15"/>
+          </svg>
+        </button>
+      </div>
+
+      <fieldset class="radio-group">
+        <legend>Master resume (code/resume/)</legend>
+        <div class="radio-options" id="master-radio-container">
+          <div class="radio-row">
+            <input type="radio" id="master-auto" name="masterResume" value="auto" checked>
+            <label for="master-auto">Auto-detect from job description</label>
+          </div>
+          <div class="radio-row">
+            <input type="radio" id="master-swe" name="masterResume" value="resume.tex">
+            <label for="master-swe">SWE / Infra / AI (resume.tex)</label>
+          </div>
+          <div class="radio-row">
+            <input type="radio" id="master-parttime" name="masterResume" value="resume-parttime.tex">
+            <label for="master-parttime">Part-time / Service (resume-parttime.tex)</label>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="field-grid">
+        <div class="field">
+          <label for="agent-select">Local AI agent</label>
+          <select id="agent-select" name="agentId">
+            <option value="antigravity">Antigravity CLI (agy)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="model-select">Model</label>
+          <select id="model-select" name="model">
+            <option value="">Auto Fast (Flash Low)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="setting-effort">Reasoning effort</label>
+        <select id="setting-effort" name="effort">
+          <option value="low" selected>Low (fastest)</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="xhigh">Extra High</option>
+          <option value="">Auto (Low latency)</option>
+        </select>
+      </div>
+
+      <div class="folder-picker-row">
+        <div class="folder-info">
+          <span class="folder-label">Direct save folder</span>
+          <p class="folder-name" id="selected-folder-name">Not selected (uses Save As window)</p>
+        </div>
+        <div class="folder-buttons">
+          <button type="button" id="btn-pick-folder" class="btn btn-secondary btn-sm">Choose</button>
+          <button type="button" id="btn-clear-folder" class="btn btn-ghost btn-sm" hidden>Clear</button>
+        </div>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="auto-save-as" name="autoSaveAs" checked>
+        <label for="auto-save-as">Pop up Save As window when generating a new PDF</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="setting-fast-mode" name="fastMode" checked>
+        <label for="setting-fast-mode">Fast mode (1 writing polish pass instead of 2)</label>
+      </div>
+
+      <div class="field">
+        <label for="setting-server-url">Companion Server URL</label>
+        <input
+          type="url"
+          id="setting-server-url"
+          name="serverUrl"
+          value="http://127.0.0.1:8787"
+          required
+          autocorrect="off"
+          autocapitalize="none"
+          spellcheck="false"
+        >
+      </div>
+
+      <p class="dialog-repo-note">Resume archive: <code id="setting-repo-path">~/code/resume</code></p>
+
+      <div class="dialog-footer">
+        <button type="submit" value="cancel" formnovalidate class="btn btn-ghost btn-sm">Cancel</button>
+        <button type="submit" value="save" class="btn btn-primary btn-sm">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast Notification Region (Popover API manual state) -->
+  <div class="toast-region" role="region" aria-label="Notifications">
+    <div id="app-toast" class="toast" popover="manual" data-variant="info">
+      <p id="toast-message" class="toast-message"></p>
+      <button type="button" id="toast-dismiss" class="toast-close" popovertarget="app-toast" popovertargetaction="hide">
+        Dismiss
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen Reader Announcement Fallback -->
+  <p class="visually-hidden">Screen reader announcements</p>
+  <div id="sr-announcer" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

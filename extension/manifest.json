@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Resume Tailor — Local AI",
+  "version": "1.0.0",
+  "description": "Tailor your local LaTeX resume to any job description using local AI agents (Antigravity CLI) on Windows (WSL) or macOS and save resume-{company}-{jobtitle}.pdf.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqidtfXbB57piYhCPfggJr1nS0G5aZrI1QCSodHKXLKgahNEvE7ka8/Y5MJ16sDq9WeuAKZHZ8a8aw/Euxdivgz0svX5TVlqOlt+iz/jpF64zCN9RShcY+8JDkY6AYF8ZwnJJfQEJjSEuknyIp535OVv1P+4wu9KHBSvl3mxKQdA06S+qcW20hf3v2zXIXo4FLwMi7pMTBJtjXvbDLtw+uPGeHoc41i6ZfQiXd8tc2msqHgkT+WxWN7LYxu+6mRrn4iYnIvh/AozsuWYjcrvYLn7XLBr2JTelxQEFRlxe/BtZ+7cJzUXROc9pWFG56DMV9qap6cO+fUv2wFDzCbhXaQIDAQAB",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Open Resume Tailor Sidebar",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "scripting",
+    "storage",
+    "downloads",
+    "contextMenus",
+    "alarms",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "commands": {
+    "open-resume-tailor": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Open the Resume Tailor side panel"
+    }
+  }
+}
