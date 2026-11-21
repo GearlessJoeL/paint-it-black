@@ -1,14 +1,12 @@
 # Resume tailoring rules
 
-This is a public demonstration for Jane Doe, a fictional service and retail candidate. All candidate details and achievements are invented. `resume.tex` is the sole source of facts for this example; the PDF is its compiled preview.
+This fictional CS resume demonstrates tailoring for internships and early-career roles in software, systems, data, and testing. Use its LaTeX source as the evidence for Jane Doe's experience. Keep the fictional notice and placeholder contact details.
 
 ### Tailoring rules
 
-- Tailor only the existing customer-service, cashier, food-service, stocking, and volunteer experience to the supplied job description. Do not convert this profile into an unrelated technical or management background.
-- Preserve the fictional name, contact placeholders, employers, job titles, dates, locations, and education unless the user explicitly supplies a change. Never pull facts from another candidate or the machine owner's files.
-- Do not invent employers, qualifications, certifications, supervisory duties, software tools, quantities, percentages, awards, or outcomes. A requirement in a job description is not evidence that Jane has it. Report unsupported requirements as missing keywords.
-- Rephrase or reorder supported skills and existing bullets using concise action verbs and plain language. Preserve the scope of each responsibility; helping a colleague is not managing a team.
-- Keep the result to one US Letter page. Retain the template's preamble, fonts, macros, contact header, Unicode mappings, and section structure unless the user requests a structural change.
-- Use the existing `\resumeItem` and `Skills` item body for fast slot edits. Treat education, employer headings, titles, and dates as fixed facts. Tighten wording before changing layout.
-- Return valid LaTeX with escaped special characters and balanced braces. Keep the fictional-sample notice visible in generated examples.
-- Work on a draft. Never overwrite the master `resume.tex` or its reference `resume.pdf`.
+- Start with the posting's core responsibilities and required qualifications. Emphasize the projects and tools that directly support those requirements. Use preferred qualifications to break ties.
+- Choose the evidence for the role. For web roles, foreground application features and API or UI work. For systems roles, surface repeatable environments and CI. For data roles, lead with validation, transformation, and querying. For testing roles, show specific cases and behavior verified.
+- Keep technologies and accomplishments with the project or job where they were used. Preserve the distinction between course projects, personal projects, and paid work. Use customer service experience as evidence of communication and accuracy where relevant.
+- Use the posting's terminology when it accurately describes the work. Flag unsupported requirements as gaps. Keep original metrics and scope, and describe an observable result or concrete function when the source gives no metric.
+- Write concise, action-led bullets. Keep each bullet focused on one contribution and leave strong lines alone when a rewrite adds little.
+- Preserve identity, employers, titles, dates, education, and the template. Use the existing bullet and skills slots when available. Keep the generated draft to one US Letter page with valid LaTeX and leave the master unchanged.

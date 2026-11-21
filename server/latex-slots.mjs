@@ -90,17 +90,34 @@ function parseSections(tex) {
   return sections;
 }
 
+// Give the model access to fixed qualifications without making them editable.
+// References and the contact header are unnecessary for matching a job.
+export function extractLockedQualifications(tex = '') {
+  return parseSections(tex)
+    .filter(({ title }) => IMMUTABLE_SECTION_RE.test(title) && !/^references?$/i.test(title))
+    .map(({ headerStart, bodyEnd }) => tex.slice(headerStart, bodyEnd).trim())
+    .join('\n\n')
+    .slice(0, 4_000);
+}
+
 function findPrecedingSubheadingLabel(sectionBody, offsetInSection) {
   const prefix = sectionBody.slice(0, offsetInSection);
-  const re = /\\resumeSubheading(?:Large)?\s*\{/g;
+  const re = /\\(resumeSubheading(?:Large)?|resumeProjectHeading)\s*\{/g;
   let lastLabel = '';
   let m;
   while ((m = re.exec(prefix)) !== null) {
-    const open = m.index + m[0].length - 1;
-    const close = findMatchingBrace(prefix, open);
-    if (close !== -1) {
-      lastLabel = prefix.slice(open + 1, close).replace(/\s+/g, ' ').trim();
+    // Most templates put the name, date, and role in the first three arguments.
+    const argCount = m[1] === 'resumeProjectHeading' ? 2 : 3;
+    const args = [];
+    let open = re.lastIndex - 1;
+    for (let i = 0; i < argCount; i += 1) {
+      const close = findMatchingBrace(prefix, open);
+      if (close === -1) break;
+      args.push(prefix.slice(open + 1, close).replace(/\s+/g, ' ').trim());
+      const whitespace = prefix.slice(close + 1).match(/^\s*/)[0];
+      open = close + 1 + whitespace.length;
     }
+    if (args.length) lastLabel = args.filter(Boolean).join(' · ');
   }
   return lastLabel;
 }

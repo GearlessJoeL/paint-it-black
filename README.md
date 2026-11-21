@@ -19,8 +19,8 @@ and save the PDF—all from the actual Chrome extension.
 
 ![Paint It Black side-panel workflow: open a job posting, generate, edit, and save a resume](docs/screenshots/sidepanel-workflow.gif)
 
-*Recorded with the fictional Jane Doe resume and a demo job posting. AI processing
-waits are shortened. [View the walkthrough at full size](docs/screenshots/sidepanel-workflow.gif).*
+*Recorded with an earlier fictional service resume for Jane Doe and a demo job
+posting. AI processing waits are shortened. [View the walkthrough at full size](docs/screenshots/sidepanel-workflow.gif).*
 
 <details>
 <summary>View the complete one-page PDF preview</summary>
@@ -28,8 +28,6 @@ waits are shortened. [View the walkthrough at full size](docs/screenshots/sidepa
 ![Generated one-page resume preview using fictional Jane Doe details](docs/screenshots/resume-preview.png)
 
 </details>
-
-All examples use the [fictional resume sample](resume-sample/).
 
 ## Architecture
 
@@ -104,17 +102,20 @@ The fictional sample is available for testing, but is never automatically select
 as a user's resume. Resume imports and setup settings are stored under the app's
 per-user data directory. API keys are not written to resume archives or setup files.
 
-### Try the fictional resume sample
+### Try the fictional computer science resume sample
 
 The [`resume-sample/`](resume-sample/) folder is a ready-to-build example using the
 same LaTeX template as a local resume directory:
 
-- `SKILL.md`: tailoring rules that keep edits grounded in the sample's facts.
-- `resume.tex`: Jane Doe's fictional McDonald's, retail, and volunteer experience.
+- `SKILL.md`: tailoring guidance for software, systems, data, and testing roles.
+- `resume.tex`: Jane Doe's fictional computer science coursework, technical projects, and part-time experience at McDonald's and in retail.
 - `resume.pdf`: the compiled one-page preview, clearly marked as fictional.
 - `Makefile`: build and cleanup commands, plus a macOS `view` target.
 
 All candidate details are invented, and contact details use example placeholders.
+Try the same resume with different job postings to see which projects and skills
+generation emphasizes. It reports unsupported requirements as gaps.
+
 To rebuild the preview from the repository root:
 
 ```bash
