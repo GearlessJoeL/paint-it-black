@@ -24,8 +24,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible { 
 .connection-row { display:flex; gap:12px; align-items:flex-end; }
 .connection-row .field { flex:1; margin-bottom:0; }
 .connection-row button { height:44px; }
-.grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-.backend-grid:has(#cli-model-field[hidden]) { grid-template-columns:1fr; }
 .hint { font-size:12px; color:var(--muted); margin-bottom:16px; }
 .field .hint { margin:0; }
 #connection-detail { margin:12px 0 0; }
@@ -41,5 +39,5 @@ code { font-size:.9em; }
 .folder-path { overflow-wrap:anywhere; user-select:all; }
 a { color:var(--accent); }
 [hidden] { display:none!important; }
-@media(max-width:600px) { main { margin:32px auto; padding:0 14px; } section { padding:21px; } .grid { grid-template-columns:1fr; gap:0; } .effort-field { max-width:none; } .connection-row { flex-wrap:wrap; } .connection-row .field { flex-basis:100%; } }
+@media(max-width:600px) { main { margin:32px auto; padding:0 14px; } section { padding:21px; } .effort-field { max-width:none; } .connection-row { flex-wrap:wrap; } .connection-row .field { flex-basis:100%; } }
 @media(prefers-color-scheme:dark) { :root { --bg:#171a17; --card:#20251f; --text:#eff1e9; --muted:#a8b0a3; --border:#3b4436; --accent:#94b889; --soft:#2b3728; --error:#ffaaa2; } button { color:#172016; } .badge[data-ready="true"] { color:#a1c891; } }

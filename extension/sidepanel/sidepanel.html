@@ -189,23 +189,21 @@
         </button>
       </div>
 
-      <div class="field-grid">
-        <div class="field">
-          <label for="agent-select">AI backend</label>
-          <select id="agent-select" name="agentId">
-            <option value="antigravity">Antigravity CLI (agy)</option>
-            <option value="claude">Claude Code CLI (claude)</option>
-            <option value="codex">Codex CLI (codex)</option>
-            <option value="api">Direct API / Local URL</option>
-          </select>
-        </div>
-        <div id="cli-model-field" class="field">
-          <label for="model-select">Model</label>
-          <select id="model-select" name="model">
-            <option value="">Auto Fast (Flash Low)</option>
-          </select>
-          <p id="model-discovery-hint" class="field-hint" hidden></p>
-        </div>
+      <div class="field">
+        <label for="agent-select">AI backend</label>
+        <select id="agent-select" name="agentId">
+          <option value="antigravity">Antigravity CLI (agy)</option>
+          <option value="claude">Claude Code CLI (claude)</option>
+          <option value="codex">Codex CLI (codex)</option>
+          <option value="api">Direct API / Local URL</option>
+        </select>
+      </div>
+      <div id="cli-model-field" class="field">
+        <label for="model-select">Model</label>
+        <select id="model-select" name="model">
+          <option value="">Auto Fast (Flash Low)</option>
+        </select>
+        <p id="model-discovery-hint" class="field-hint" hidden></p>
       </div>
 
       <div id="api-settings-group" class="api-settings-group" hidden>

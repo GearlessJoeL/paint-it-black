@@ -32,10 +32,8 @@
       <section aria-labelledby="backend-title">
         <div class="section-heading"><span class="step">2</span><h2 id="backend-title">Choose your AI backend</h2></div>
         <p class="hint">Used to turn a PDF into editable LaTeX and tailor your resume later. A LaTeX import is compiled locally without AI conversion.</p>
-        <div class="grid backend-grid">
-          <div class="field"><label for="agent">AI backend</label><select id="agent"><option value="codex">Codex CLI</option><option value="claude">Claude Code CLI</option><option value="antigravity">Antigravity CLI</option><option value="api">API key / local endpoint</option></select></div>
-          <div class="field" id="cli-model-field"><label for="model">Model</label><select id="model"><option value="">Backend default</option></select></div>
-        </div>
+        <div class="field"><label for="agent">AI backend</label><select id="agent"><option value="codex">Codex CLI</option><option value="claude">Claude Code CLI</option><option value="antigravity">Antigravity CLI</option><option value="api">API key / local endpoint</option></select></div>
+        <div class="field" id="cli-model-field"><label for="model">Model</label><select id="model"><option value="">Backend default</option></select></div>
         <p class="hint" id="backend-detail"></p>
         <div id="api-options" hidden>
           <div class="field"><label for="api-provider">API provider</label><select id="api-provider"><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="anthropic">Anthropic</option><option value="gemini">Google Gemini</option><option value="local">Local endpoint</option></select></div>
