@@ -74,20 +74,36 @@ function discoverTexliveBinDirs() {
 
 export function loadConfig(overrides = {}) {
   const home = os.homedir();
+  const defaultDataDir = path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'paint-it-black');
+  const dataDir = path.resolve(overrides.dataDir || process.env.PAINT_IT_BLACK_DATA_DIR || defaultDataDir);
+  const setupConfigPath = path.join(dataDir, 'config.json');
+  let setup = {};
+  try { const saved = JSON.parse(fs.readFileSync(setupConfigPath, 'utf8')); if (saved && typeof saved === 'object' && !Array.isArray(saved)) setup = saved; } catch { /* First launch has no saved setup. */ }
+  const explicitResume = overrides.resumeRepoDir || process.env.RESUME_REPO_DIR;
+  const savedResume = typeof setup.resumeRepoDir === 'string' && setup.resumeRepoDir.trim()
+    ? setup.resumeRepoDir : null;
+  const legacyResume = dataDir === path.resolve(defaultDataDir) ? path.join(home, 'code', 'resume') : null;
+  const hasResume = (dir) => { try { return Boolean(dir && listMasterResumes(dir).length); } catch { return false; } };
+  // Keep a saved choice even if its file disappears; setup must request a new
+  // selection instead of silently switching to a different legacy resume.
+  const selectedResume = explicitResume || savedResume ||
+    (hasResume(legacyResume) ? legacyResume : null);
   const host = overrides.host || process.env.HOST || '127.0.0.1';
   const port = Number(overrides.port || process.env.PORT || 8787);
-  const resumeRepoDir = path.resolve(
-    overrides.resumeRepoDir ||
-      process.env.RESUME_REPO_DIR ||
-      path.join(home, 'code', 'resume'),
-  );
+  const resumeRepoDir = path.resolve(selectedResume || path.join(dataDir, 'resume'));
+  const resumeConfigured = hasResume(selectedResume);
   const revisionsDir = path.resolve(
     overrides.revisionsDir ||
       process.env.REVISIONS_DIR ||
-      path.join(home, '.local', 'state', 'resume-tailor', 'revisions'),
+      (dataDir === path.resolve(defaultDataDir)
+        ? path.join(home, '.local', 'state', 'resume-tailor', 'revisions')
+        : path.join(dataDir, 'revisions')),
   );
 
-  const texliveDirs = discoverTexliveBinDirs();
+  const managedTexRoot = path.join(dataDir, 'runtime', 'tex', 'bin');
+  let managedTexDirs = [];
+  try { managedTexDirs = fs.readdirSync(managedTexRoot).map((arch) => path.join(managedTexRoot, arch)).filter(hasAnyTexBinary); } catch { /* Runtime not installed yet. */ }
+  const texliveDirs = [...new Set([setup.texBin, ...managedTexDirs, ...discoverTexliveBinDirs()].filter((dir) => typeof dir === 'string' && dir && hasAnyTexBinary(dir)))];
   const exeExt = process.platform === 'win32' ? '.exe' : '';
   const defaultAgyPath = path.join(home, '.gemini', 'bin', `agy${exeExt}`);
   const agyBin =
@@ -140,6 +156,10 @@ export function loadConfig(overrides = {}) {
   return {
     host,
     port,
+    dataDir,
+    setupConfigPath,
+    resumeConfigured,
+    resumeSource: resumeConfigured ? 'user' : null,
     resumeRepoDir,
     revisionsDir,
     agyBin,
@@ -180,8 +200,8 @@ export function listMasterResumes(resumeRepoDir) {
     let label = filename;
     let description = 'Custom LaTeX master';
     if (filename === 'resume.tex') {
-      label = 'SWE / Infra / AI (resume.tex)';
-      description = 'Primary engineering, infrastructure, and AI resume master';
+      label = 'Primary resume (resume.tex)';
+      description = 'Your editable resume master';
     } else if (filename === 'resume-parttime.tex') {
       label = 'Part-time / Service (resume-parttime.tex)';
       description = 'Part-time, retail, food service, and hospitality master';

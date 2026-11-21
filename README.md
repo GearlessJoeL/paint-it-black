@@ -8,7 +8,7 @@ Job hunting turns into an endless loop of rewriting the same LaTeX bullets over 
 
 Worse yet, existing browser extensions (like Simplify) lock basic resume tailoring behind pricey subscriptions. When you already have plenty of AI tokens sitting in your own **Antigravity**, **Claude Code**, **OpenAI Codex**, **OpenRouter / OpenAI / Anthropic / Gemini API**, or **local Ollama / vLLM** setup, paying extra for someone else's wrapper makes zero sense. Inspired by open-source projects like [Resume-Matcher](https://github.com/srbhr/Resume-Matcher), I uninstalled Simplify, plugged my own local agents, API keys, and LaTeX workflow straight into Chrome, and **painted the whole tedious process black** — turning *"Maybe then I'll fade away and not have to face the facts"* of manual resume tweaking into a single click and a fast live chat.
 
-A Manifest V3 Chrome extension + cross-platform local companion server (supports **Windows via WSL2**, **macOS natively**, and **Linux**) that reads the job description from your active browser tab, customizes your local LaTeX resume in `~/code/resume/` using **Antigravity CLI (`agy`)**, **Claude Code CLI (`claude`)**, **OpenAI Codex CLI (`codex`)**, or **Direct API / Local URL** (OpenAI, OpenRouter, Anthropic, Google Gemini, Ollama / LM Studio / vLLM), compiles and verifies a strict **1-page PDF** with LaTeX (`pdflatex` / `latexmk`), archives everything locally, and saves `resume-{companyname}-{jobtitle}.pdf` straight to your chosen folder (with a Save As window).
+A Manifest V3 Chrome extension + cross-platform local companion server (supports **Windows via WSL2**, **macOS natively**, and **Linux**) that reads the job description from your active browser tab, customizes your imported editable LaTeX resume using **Antigravity CLI (`agy`)**, **Claude Code CLI (`claude`)**, **OpenAI Codex CLI (`codex`)**, or **Direct API / Local URL** (OpenAI, OpenRouter, Anthropic, Google Gemini, Ollama / LM Studio / vLLM), compiles and verifies a strict **1-page PDF** with LaTeX (`pdflatex` / `latexmk`), archives everything locally, and saves `resume-{companyname}-{jobtitle}.pdf` straight to your chosen folder (with a Save As window).
 
 *No subscriptions. No colors anymore. Just open a job tab, click Generate, and ship.*
 
@@ -21,7 +21,7 @@ Chrome Side Panel (Windows or macOS)
   │  3. Streams JD + chat/edits to http://127.0.0.1:8787 (SSE)
   ▼
 Local Companion Server (server/index.mjs, 127.0.0.1:8787)
-  │  4. Reads master .tex & SKILL.md from ~/code/resume/ (read-only)
+  │  4. Reads your chosen master .tex & SKILL.md (read-only)
   │  5. Routes to your chosen AI backend:
   │       • Antigravity CLI (`agy`)  — persistent warm stream-json worker
   │       • Claude Code CLI (`claude`) — headless structured JSON + `--resume`
@@ -41,17 +41,74 @@ Chrome Side Panel + Floating Preview Window
 
 ## Quick Start
 
-### Prerequisites
+### What users need
 
-- **All platforms:** Node.js `>= 20`, Google Chrome (or Chromium/Edge/Brave), your LaTeX master resume folder at `~/code/resume/`, and **at least one AI backend**:
-  - **Antigravity CLI (`agy`)** — uses your signed-in Google AI Pro account (pre-warmed persistent worker, dynamic model & effort discovery via `agy models`)
-  - **Claude Code CLI (`claude`)** — uses your local Claude subscription or `ANTHROPIC_API_KEY` (`npm i -g @anthropic-ai/claude-code`)
-  - **OpenAI Codex CLI (`codex`)** — uses your local ChatGPT/Codex login or `OPENAI_API_KEY` (`npm i -g @openai/codex`)
-  - **Direct API / Local URL** — **OpenAI**, **OpenRouter**, **Local URL** (Ollama / LM Studio / vLLM — no API key required), **Anthropic**, or **Google Gemini** via Chrome Settings or server environment variables
-- **macOS:** Install LaTeX via **MacTeX** or **BasicTeX** (`brew install --cask mactex-no-gui` or `brew install --cask basictex`). If using BasicTeX, ensure `latexmk` and any packages your resume template uses are installed via `tlmgr`.
-- **Windows (WSL2):** Install Node.js `>= 20`, TeX Live (`~/texlive` or `apt`), and your preferred AI CLI (or run with Direct API / Local URL) inside your WSL distro.
+- Google Chrome (or a compatible Chromium browser).
+- One signed-in local AI agent (Antigravity, Claude Code, or Codex), or an API key.
+- Their own PDF or self-contained LaTeX resume.
 
-### 1. Connect Your AI Backend (one-time)
+**Node.js, npm dependencies, LaTeX, resume packages, and background startup are
+prepared by setup on macOS and Linux/WSL.** Users do not need Homebrew, a prebuilt TeX environment, or a
+`~/code/resume` directory. Setup uses per-user runtime folders and does not replace
+an existing Node or TeX installation. Internet access is needed for first-time
+downloads and PDF conversion with a hosted AI provider.
+
+Chrome requires a separately registered native companion before an extension can
+launch local software. The extension opens a first-run setup page that guides the
+user through this one-time step, then resume selection and backend configuration.
+
+### First installation
+
+1. Download and extract this repository, or clone it.
+2. On macOS, run **Setup.command** from the extracted folder. On Linux or Windows
+   with WSL2, run `bash scripts/setup.sh`. Setup prepares a supported Node runtime,
+   application dependencies, portable TinyTeX, and background startup. It installs
+   a stable copy under `~/.local/share/paint-it-black/companion/`, so the background
+   service does not depend on keeping the download or checkout.
+3. Open **chrome://extensions → Developer mode → Load unpacked**. Select the
+   **extension folder printed by setup**, normally
+   `~/.local/share/paint-it-black/companion/extension/`. The first-run page opens.
+4. Choose an installed local agent or enter an API key, then select **your PDF or
+   LaTeX resume**. PDF imports are converted by that backend into editable LaTeX.
+5. Setup verifies a one-page PDF before activating the imported master. Open a job
+   posting, generate a tailored draft, review the PDF, and save it.
+
+If you loaded the extension before running the companion installer, keep its setup
+page open and click **Reconnect** when installation finishes. For an unpacked
+extension, keep its source folder or load the stable extension folder above.
+
+The fictional sample is available for testing, but is never automatically selected
+as a user's resume. Resume imports and setup settings are stored under the app's
+per-user data directory. API keys are not written to resume archives or setup files.
+
+### Try the fictional resume sample
+
+The [`resume-sample/`](resume-sample/) folder is a ready-to-build example using the
+same LaTeX template as a local resume directory:
+
+- `SKILL.md`: tailoring rules that keep edits grounded in the sample's facts.
+- `resume.tex`: Jane Doe's fictional McDonald's, retail, and volunteer experience.
+- `resume.pdf`: the compiled one-page preview, clearly marked as fictional.
+- `Makefile`: build and cleanup commands, plus a macOS `view` target.
+
+All candidate details are invented, and contact details use example placeholders.
+To rebuild the preview from the repository root:
+
+```bash
+make -C resume-sample
+```
+
+To try the sample separately from an existing companion, start a demo server:
+
+```bash
+RESUME_REPO_DIR="$PWD/resume-sample" PORT=8788 ./scripts/start-server.sh
+```
+
+Set **Settings → Companion Server URL** in the extension to
+`http://127.0.0.1:8788` while trying the sample. Your existing resume directory is
+not changed. Restore the URL to `http://127.0.0.1:8787` to use your usual companion.
+
+### AI backend options
 
 Pick whichever backend you prefer — and switch anytime in **Settings → AI backend**:
 
@@ -69,15 +126,17 @@ Pick whichever backend you prefer — and switch anytime in **Settings → AI ba
   3. Paste your API key in Settings (stored locally in `chrome.storage.local`, sent only over loopback `127.0.0.1:8787`, never written to `metadata.json` or resume archives) — or set the corresponding environment variable on the server (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
   4. Optionally pick a preset model or type any model ID into **Custom model** (e.g., an OpenRouter slug or local Ollama model name).
 
-### 2. Enable Zero-Touch Auto-Start (Windows WSL & macOS)
+### Automatic companion setup
 
-Run the same unified installer in **macOS Terminal** or **Windows WSL**:
+Run the same unified installer in **macOS Terminal**, **Linux**, or **Windows WSL**:
 
 ```bash
 git clone https://github.com/GearlessJoeL/paint-it-black.git
 cd paint-it-black
-./scripts/install-autostart.sh
+./scripts/setup.sh
 ```
+
+The older `scripts/install-autostart.sh` entry point runs the same preparation.
 
 What it sets up automatically for your OS:
 
@@ -95,17 +154,22 @@ To remove all auto-start entries cleanly at any time:
 ./scripts/uninstall-autostart.sh
 ```
 
-Setup finds an installed **Node.js >=20** automatically, including fnm's default
-installation when run from a clean environment. It saves the real Node binary
+Setup finds an installed **Node.js >=22.3** automatically, including fnm's default
+installation, or downloads a verified portable Node runtime when none is suitable. It saves the real Node binary
 path for the background service and browser auto-waker, adds its directory to
 their PATH, and verifies the running companion before reporting completion.
 Temporary `fnm_multishells` paths and shell-profile initialization are not needed.
 If a saved Node version is later removed, startup searches installed supported
 versions again. After pulling this update, rerun `./scripts/install-autostart.sh`
 once to repair an existing installation; no environment settings are required.
+A fresh installation is ready after the user chooses and verifies their own resume
+in the extension setup page.
 
 Setup reports each AI backend's availability. Sign in to your preferred installed
 CLI or configure an API provider in the extension's Settings to generate resumes.
+The companion code and dependencies are copied into the per-user app folder;
+your resume imports and configuration stay alongside it and are preserved on reruns.
+
 Installing a CLI after the companion is already running is supported: click
 **Reconnect** to rediscover installed backends without restarting the companion.
 
@@ -117,17 +181,17 @@ does not send a generation prompt.
 
 *(Prefer running manually instead? Run `./scripts/start-server.sh`.)*
 
-### 3. Load the Chrome Extension
+### Load the Chrome extension
 
 1. Open `chrome://extensions` in Chrome.
 2. Enable **Developer mode** (top-right toggle).
-3. Click **Load unpacked** and select the `extension` directory:
-   - **macOS:** `~/code/paint-it-black/extension` (or wherever you cloned this repo)
+3. Click **Load unpacked** and select the stable `extension` directory printed by setup:
+   - **macOS/Linux:** `~/.local/share/paint-it-black/companion/extension` (or your selected app data directory)
    - **Windows (via WSL):** `\\wsl$\<Distro>\home\<username>\path\to\extension` (or `\\wsl.localhost\<Distro>\home\<username>\path\to\extension`)
-4. Pin **Paint It Black** to your toolbar.
+4. Pin **Paint It Black** to your toolbar and finish the automatically opened setup page.
    *(When pulling updates, click **Reload** on the extension card in `chrome://extensions`.)*
 
-### 4. Use It on Any Job Posting
+### Use it on a job posting
 
 1. Open any job listing (LinkedIn, Greenhouse, Lever, Ashby, Workday, Indeed, or a company careers page).
    - Entering a new job description page automatically resets the sidebar chat and preview session for that job.
@@ -141,12 +205,17 @@ does not send a generation prompt.
 
 ## Where Files Are Saved
 
-- **Local Resume Archive (always saved):**
-  - `~/code/resume/tailored/<company>-<jobtitle>/job.md`
-  - `~/code/resume/tailored/<company>-<jobtitle>/resume.tex`
-  - `~/code/resume/tailored/<company>-<jobtitle>/resume.pdf`
-  - `~/code/resume/tailored/<company>-<jobtitle>/resume-<company>-<jobtitle>.pdf`
-  - `~/code/resume/tailored/<company>-<jobtitle>/metadata.json`
+Imported masters live in `~/.local/share/paint-it-black/resume/<import-id>/`
+(or the selected app data directory). Each import includes the original file,
+`resume.tex`, verified `resume.pdf`, and `SKILL.md`. Existing `~/code/resume` users
+keep their own folder when upgrading.
+
+- **Local Resume Archive (under the selected master folder):**
+  - `<master-folder>/tailored/<company>-<jobtitle>/job.md`
+  - `<master-folder>/tailored/<company>-<jobtitle>/resume.tex`
+  - `<master-folder>/tailored/<company>-<jobtitle>/resume.pdf`
+  - `<master-folder>/tailored/<company>-<jobtitle>/resume-<company>-<jobtitle>.pdf`
+  - `<master-folder>/tailored/<company>-<jobtitle>/metadata.json`
 - **Save Folder / Save As:**
   - Writes directly to your selected folder (when chosen with active permission) and/or opens Chrome's native Save As dialog pre-filled with `resume-{companyname}-{jobtitle}.pdf`.
 - **Master resumes (`resume.tex`, `resume-parttime.tex`) are never modified.**
@@ -164,12 +233,15 @@ Switch anytime in **Settings → AI backend**:
 
 To add another backend, implement `checkStatus()` and `runStructuredPrompt(...)` (and optionally `runUnifiedTurn(...)`) and register it in `createDefaultRegistry()` inside `server/agents/registry.mjs`.
 
-## Configuration (Environment Variables)
+## Optional configuration (environment variables)
+
+Normal setup requires no environment variables.
 
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `8787` | Localhost port for the companion server |
-| `RESUME_REPO_DIR` | `~/code/resume` | Path to your LaTeX resume repository |
+| `RESUME_REPO_DIR` | Saved resume selection | Optional override for an existing LaTeX resume folder |
+| `PAINT_IT_BLACK_DATA_DIR` | `~/.local/share/paint-it-black` | Per-user runtimes, companion, imports, and setup settings; respects `XDG_DATA_HOME` |
 | `AGY_BIN` | `~/.gemini/bin/agy` (or on `PATH`) | Path to the Antigravity CLI binary |
 | `CLAUDE_BIN` | `~/.local/bin/claude` (or on `PATH`) | Path to the Claude Code CLI binary |
 | `CODEX_BIN` | `~/.local/bin/codex` (or on `PATH`) | Path to the Codex CLI binary |
@@ -182,6 +254,10 @@ To add another backend, implement `checkStatus()` and `runStructuredPrompt(...)`
 | `MAX_REPAIR_ATTEMPTS` | `2` | Automatic LaTeX / 1-page overflow fix passes |
 
 ## Running Tests
+
+To prepare and verify runtimes without registering login services, run
+`bash scripts/setup.sh --prepare-only`. A fresh setup remains incomplete until
+a resume is explicitly selected in Chrome.
 
 ```bash
 npm test

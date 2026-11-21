@@ -5,6 +5,36 @@ HOST_NAME="com.local.resume_tailor.launcher"
 LAUNCHD_LABEL="com.local.resume_tailor.server"
 OS_NAME="$(uname -s)"
 STATE_DIR="${HOME}/.local/state/resume-tailor"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+stop_owned_wsl_keepalive() {
+  local pid_file="${STATE_DIR}/autostart.pid" owner_pid='' owner_script='' owner_root=''
+  if [ -f "${pid_file}" ]; then
+    {
+      IFS= read -r owner_pid || true
+      IFS= read -r owner_script || true
+    } < "${pid_file}"
+    case "${owner_pid}" in ''|*[!0-9]*) owner_pid='' ;; esac
+    case "${owner_script}" in
+      /*/scripts/wsl-autostart.sh)
+        owner_root="${owner_script%/scripts/wsl-autostart.sh}"
+        ;;
+      *) owner_script='' ;;
+    esac
+    # A downloaded-source uninstaller may stop the stable installed companion,
+    # whose owner marker identifies its recorded script as this application.
+    if [ -n "${owner_pid}" ] && [ "${owner_pid}" -gt 1 ] && [ -n "${owner_script}" ] && \
+      { [ "${owner_script}" = "${SCRIPT_DIR}/wsl-autostart.sh" ] ||
+        grep -Eq '"owner"[[:space:]]*:[[:space:]]*"paint-it-black"' "${owner_root}/.paint-it-black-companion.json" 2>/dev/null; } && \
+      [ -r "/proc/${owner_pid}/cmdline" ] && \
+      tr '\000' '\n' < "/proc/${owner_pid}/cmdline" | grep -Fx -- "${owner_script}" >/dev/null; then
+      echo 'Stopping the registered WSL keepalive process...'
+      kill -TERM "${owner_pid}" 2>/dev/null || true
+    fi
+    rm -f "${pid_file}"
+  fi
+  rm -f "${STATE_DIR}/wsl-launcher.sh"
+}
 
 case "${OS_NAME}" in
   Darwin)
@@ -14,7 +44,6 @@ case "${OS_NAME}" in
     launchctl bootout "gui/${uid_num}/${LAUNCHD_LABEL}" >/dev/null 2>&1 || true
     launchctl unload -w "${plist_path}" >/dev/null 2>&1 || true
     rm -f "${plist_path}"
-    pkill -f '[n]ode server/index\.mjs' >/dev/null 2>&1 || true
 
     echo "Removing Chrome Native Messaging host..."
     rm -f "${STATE_DIR}/native-host.sh"
@@ -31,12 +60,11 @@ case "${OS_NAME}" in
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
     export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
 
+    stop_owned_wsl_keepalive
     echo "Stopping and disabling systemd user service..."
     systemctl --user disable --now resume-tailor.service >/dev/null 2>&1 || true
     rm -f "${HOME}/.config/systemd/user/resume-tailor.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    pkill -f '[r]esume-tailor-extension/scripts/wsl-autostart\.sh' >/dev/null 2>&1 || true
-    pkill -f '[n]ode server/index\.mjs' >/dev/null 2>&1 || true
 
     if [ -n "${WSL_DISTRO_NAME:-}" ] || [ -e /proc/sys/fs/binfmt_misc/WSLInterop ]; then
       win_appdata="$(cmd.exe /c "echo %APPDATA%" 2>/dev/null | tr -d '\r\n')"

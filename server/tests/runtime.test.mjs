@@ -154,7 +154,7 @@ test('runtime reports a useful failure when only unsupported Node is available',
   assert.ifError(result.error);
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, '');
-  assert.match(result.stderr, /Node\.js.*(?:20|>=\s*20)/i);
+  assert.match(result.stderr, /Node\.js.*22\.3/i);
 });
 
 test('runtime supports NVM_DIR and Volta installations without shell initialization', async (t) => {
@@ -300,7 +300,7 @@ test('macOS setup persists a durable runtime and native messaging survives the t
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const port = String(server.address().port);
   const installed = await runChild('/bin/bash', [path.join(scripts, 'install-autostart.sh')], {
-    env: { HOME: fixture.home, PATH: `${transientBin}:${fixture.utilityBin}`, PORT: port },
+    env: { HOME: fixture.home, PATH: `${transientBin}:${fixture.utilityBin}`, PORT: port, PAINT_IT_BLACK_BOOTSTRAPPED: '1' },
   });
   assert.equal(installed.status, 0, installed.stderr);
   assert.match(installed.stdout.toString(), /macOS auto-start setup complete/);
@@ -353,7 +353,7 @@ test('macOS setup persists a durable runtime and native messaging survives the t
   assert.ok(requests.filter((url) => url === '/api/ping').length >= 3);
 
   const nonRunning = await runChild('/bin/bash', [path.join(scripts, 'install-autostart.sh')], {
-    env: { HOME: fixture.home, PATH: fixture.utilityBin, PORT: port, MOCK_LAUNCHCTL_STATE: 'exited' },
+    env: { HOME: fixture.home, PATH: fixture.utilityBin, PORT: port, PAINT_IT_BLACK_BOOTSTRAPPED: '1', MOCK_LAUNCHCTL_STATE: 'exited' },
   });
   assert.notEqual(nonRunning.status, 0);
   assert.match(nonRunning.stderr, /LaunchAgent is not running/);

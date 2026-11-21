@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Set up Paint It Black</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">PAINT IT BLACK</p>
+    <h1>Your resume, ready to tailor.</h1>
+    <p class="intro">Connect the local companion, choose your AI backend, and import your own resume. Setup prepares Node and LaTeX for you.</p>
+
+    <section aria-labelledby="companion-title">
+      <div class="section-heading"><span class="step">1</span><h2 id="companion-title">Connect the companion</h2><span id="connection-status" class="badge" role="status">Checking…</span></div>
+      <div id="install-help" hidden>
+        <p>Chrome extensions cannot install a local companion on their own. Download the project and run its setup once. It prepares the runtimes and starts automatically whenever you sign in.</p>
+        <p><a href="https://github.com/GearlessJoeL/paint-it-black" target="_blank" rel="noopener noreferrer">Get the companion</a>. On macOS, open <code>Setup.command</code> in the project folder. On Linux or Windows WSL, run this in the project folder:</p>
+        <pre>bash scripts/setup.sh</pre>
+        <p class="hint">Keep your local AI agent signed in, or use an API key in step 2. No Node, LaTeX, or shell environment configuration is needed.</p>
+      </div>
+      <div class="connection-row">
+        <div class="field"><label for="server-url">Companion address</label><input id="server-url" type="url" value="http://127.0.0.1:8787" autocomplete="off" spellcheck="false"></div>
+        <button id="retry" class="secondary" type="button">Reconnect</button>
+      </div>
+      <p class="hint" id="connection-detail" role="status"></p>
+    </section>
+
+    <form id="setup-form">
+      <section aria-labelledby="backend-title">
+        <div class="section-heading"><span class="step">2</span><h2 id="backend-title">Choose your AI backend</h2></div>
+        <p class="hint">Used to turn a PDF into editable LaTeX and tailor your resume later. A LaTeX import is compiled locally without AI conversion.</p>
+        <div class="grid">
+          <div class="field"><label for="agent">AI backend</label><select id="agent"><option value="codex">Codex CLI</option><option value="claude">Claude Code CLI</option><option value="antigravity">Antigravity CLI</option><option value="api">API key / local endpoint</option></select></div>
+          <div class="field"><label for="model">Model</label><select id="model"><option value="">Backend default</option></select></div>
+        </div>
+        <p class="hint" id="backend-detail"></p>
+        <div id="api-options" hidden>
+          <div class="grid">
+            <div class="field"><label for="api-provider">API provider</label><select id="api-provider"><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="anthropic">Anthropic</option><option value="gemini">Google Gemini</option><option value="local">Local endpoint</option></select></div>
+            <div class="field"><label for="custom-model">Custom model (optional)</label><input id="custom-model" type="text" autocomplete="off" spellcheck="false" placeholder="Use provider default"></div>
+          </div>
+          <div class="field"><label for="api-key">API key</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Your provider API key"><p class="hint">Saved only in this Chrome profile. Never saved with your resume. Leave blank to use the companion's existing provider credentials.</p></div>
+          <div class="field"><label for="api-base-url">API base URL (optional)</label><input id="api-base-url" type="url" autocomplete="off" spellcheck="false" placeholder="Default provider endpoint"></div>
+        </div>
+        <div class="field effort-field"><label for="effort">Reasoning effort</label><select id="effort"><option value="">Backend default</option></select></div>
+      </section>
+
+      <section aria-labelledby="resume-title">
+        <div class="section-heading"><span class="step">3</span><h2 id="resume-title">Choose your resume</h2></div>
+        <p>Choose a text-based PDF or a self-contained LaTeX file, up to 8 MB. PDF imports become an editable one-page template with your own facts.</p>
+        <div class="field"><label class="file-label" for="resume-file">Resume file</label><input id="resume-file" type="file" accept=".pdf,.tex,application/pdf,text/x-tex" required></div>
+        <p id="sharing-notice" class="notice">Choose a resume and backend to continue.</p>
+        <p class="hint">Your original stays unchanged. Each import gets a separate local folder. The fictional sample is never selected for you.</p>
+        <button id="import" type="submit" disabled>Import my resume</button>
+        <p id="progress" class="progress" role="status" aria-live="polite"></p>
+        <p id="error" class="error" role="alert" hidden></p>
+      </section>
+    </form>
+    <section id="success" class="success" hidden aria-labelledby="success-title">
+      <h2 id="success-title">You're ready.</h2>
+      <p id="success-detail"></p>
+      <p><a id="review-pdf" target="_blank" rel="noopener noreferrer">Review imported PDF</a></p>
+      <p class="hint">Find your editable <code>resume.tex</code> and tailoring rules in:</p>
+      <p><code id="resume-folder" class="folder-path"></code></p>
+      <p>Open a job posting, then click the Paint It Black extension to tailor your resume.</p>
+      <button type="button" id="done">Done</button>
+    </section>
+    <p class="footer">Resume files stay on your computer. AI requests use only the backend you select.</p>
+  </main>
+  <script type="module" src="setup.js"></script>
+</body>
+</html>

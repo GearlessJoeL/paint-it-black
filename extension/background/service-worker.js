@@ -46,6 +46,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     if (!existing.settings) {
       await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
     }
+    await chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
   }
 
   try {

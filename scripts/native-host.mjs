@@ -91,7 +91,7 @@ function wakeServer() {
   const uid = typeof process.getuid === 'function' ? process.getuid() : '';
 
   if (process.platform === 'darwin' && uid !== '') {
-    const label = 'com.local.resume_tailor.server';
+    const label = process.env.PAINT_IT_BLACK_SERVICE_LABEL || 'com.local.resume_tailor.server';
     const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
     try {
       execFileSync('launchctl', ['kickstart', '-k', `gui/${uid}/${label}`], { stdio: 'ignore' });

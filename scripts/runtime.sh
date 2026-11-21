@@ -19,7 +19,8 @@ resume_tailor_try_node() {
   # Resolve fnm's multishell/default symlinks to the real installation, and
   # validate the minimum version even for explicitly supplied NODE_BIN.
   if resolved="$("${candidate}" -e '
-    if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1);
+    const [major, minor] = process.versions.node.split(".").map(Number);
+    if (major < 22 || (major === 22 && minor < 3)) process.exit(1);
     process.stdout.write(require("node:fs").realpathSync(process.execPath));
   ' 2>/dev/null)" && [ -n "${resolved}" ] && [ -x "${resolved}" ]; then
     NODE_BIN="${resolved}"
@@ -33,6 +34,11 @@ resume_tailor_find_node() {
   local best_major=0 best_minor=0 best_patch=0 version
 
   for candidate in "${NODE_BIN:-}" "${path_node}" "$(command -v node || true)"; do
+    if resume_tailor_try_node "${candidate}"; then return 0; fi
+  done
+
+  local managed_root="${PAINT_IT_BLACK_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/paint-it-black}/runtime/node"
+  for candidate in "${managed_root}"/node-v*/bin/node; do
     if resume_tailor_try_node "${candidate}"; then return 0; fi
   done
 
@@ -87,6 +93,8 @@ resume_tailor_configure_runtime() {
     "${VOLTA_HOME:-${HOME}/.volta}/bin" "${HOME}/.local/bin" "${HOME}/.gemini/bin"; do
     resume_tailor_prepend_path "${tool_dir}"
   done
+  local managed_tex="${PAINT_IT_BLACK_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/paint-it-black}/runtime/tex"
+  for bin_dir in "${managed_tex}"/bin/*; do resume_tailor_prepend_path "${bin_dir}"; done
   for tex_root in /usr/local/texlive "${HOME}/texlive" "${HOME}/.local/texlive"; do
     for bin_dir in "${tex_root}"/[0-9][0-9][0-9][0-9]/bin/*; do
       resume_tailor_prepend_path "${bin_dir}"
@@ -95,7 +103,7 @@ resume_tailor_configure_runtime() {
   export PATH
 
   if ! resume_tailor_find_node "${path_node}"; then
-    echo '[resume-tailor] Error: Node.js >=20 was not found. Install Node.js >=20 (or run fnm install --lts), then rerun setup.' >&2
+    echo '[resume-tailor] Error: Node.js >=22.3 was not found. Run Setup.command or scripts/setup.sh to prepare it automatically.' >&2
     return 1
   fi
   case "${NODE_BIN}" in

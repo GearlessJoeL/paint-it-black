@@ -129,7 +129,7 @@ export async function compileLatex({ workDir, texFilename = 'resume.tex', env, s
   try {
     result = await runCommand(
       'pdflatex',
-      ['-interaction=nonstopmode', '-halt-on-error', texFilename],
+      ['-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', texFilename],
       { cwd: workDir, env, signal },
     );
 
@@ -138,7 +138,7 @@ export async function compileLatex({ workDir, texFilename = 'resume.tex', env, s
       if (/Rerun to get (?:cross-references|outlines|annotations) right/i.test(firstLog)) {
         result = await runCommand(
           'pdflatex',
-          ['-interaction=nonstopmode', '-halt-on-error', texFilename],
+          ['-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', texFilename],
           { cwd: workDir, env, signal },
         );
       }
@@ -148,7 +148,7 @@ export async function compileLatex({ workDir, texFilename = 'resume.tex', env, s
     compiler = 'latexmk';
     result = await runCommand(
       'latexmk',
-      ['-pdf', '-g', '-interaction=nonstopmode', '-halt-on-error', texFilename],
+      ['-pdf', '-g', '-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', texFilename],
       { cwd: workDir, env, signal },
     );
   }

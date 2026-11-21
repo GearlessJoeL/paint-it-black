@@ -73,6 +73,7 @@ const els = {
   btnReconnect: document.getElementById('btn-reconnect'),
   btnOpenHistory: document.getElementById('btn-open-history'),
   btnOpenSettings: document.getElementById('btn-open-settings'),
+  btnOpenSetup: document.getElementById('btn-open-setup'),
   alertStrip: document.getElementById('alert-strip'),
   alertStripText: document.getElementById('alert-strip-text'),
   btnRetryHealth: document.getElementById('btn-retry-health'),
@@ -880,6 +881,10 @@ async function applyHealthResponse(health) {
   }
 
   const activeAgent = health.agents?.find((a) => a.id === state.settings.agentId) || health.agents?.[0];
+  if (health.resumeConfigured === false || health.masters?.length === 0) {
+    setConnectionStatus('auth-needed', 'Choose resume', 'Finish setup by choosing your own PDF or LaTeX resume. Click the resume icon beside Reconnect.');
+    return false;
+  }
   const shellHint = isMacClient() || health.platform === 'darwin' ? 'Terminal' : 'WSL';
   const apiProvider = state.settings.apiProvider || 'openai';
   const apiProviderMeta = activeAgent?.providers?.[apiProvider];
@@ -2034,6 +2039,9 @@ async function handlePickFolder() {
 
 function wireEvents() {
   installClosedByFallback();
+  els.btnOpenSetup.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+  });
 
   els.btnStatusDot.addEventListener('click', async () => {
     await reconnectLocalClients();

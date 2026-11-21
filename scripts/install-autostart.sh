@@ -3,11 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HOST_NAME="com.local.resume_tailor.launcher"
-LAUNCHD_LABEL="com.local.resume_tailor.server"
+if [ "${PAINT_IT_BLACK_BOOTSTRAPPED:-}" != "1" ]; then
+  exec /bin/bash "${SCRIPT_DIR}/setup.sh" "$@"
+fi
+HOST_NAME="${PAINT_IT_BLACK_NATIVE_HOST:-com.local.resume_tailor.launcher}"
+LAUNCHD_LABEL="${PAINT_IT_BLACK_SERVICE_LABEL:-com.local.resume_tailor.server}"
 PORT="${PORT:-8787}"
 OS_NAME="$(uname -s)"
-STATE_DIR="${HOME}/.local/state/resume-tailor"
+STATE_DIR="${PAINT_IT_BLACK_STATE_DIR:-${HOME}/.local/state/resume-tailor}"
 
 source "${SCRIPT_DIR}/runtime.sh"
 resume_tailor_configure_runtime
@@ -37,6 +40,10 @@ write_posix_native_wrapper() {
     printf 'export FNM_DIR=%q\n' "${FNM_DIR:-}"
     printf 'export XDG_DATA_HOME=%q\n' "${XDG_DATA_HOME:-}"
     printf 'export PORT=%q\n' "${PORT}"
+    printf 'export PAINT_IT_BLACK_DATA_DIR=%q\n' "${PAINT_IT_BLACK_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/paint-it-black}"
+    printf 'export PAINT_IT_BLACK_SERVICE_LABEL=%q\n' "${LAUNCHD_LABEL}"
+    printf 'export RESUME_REPO_DIR=%q\n' "${RESUME_REPO_DIR:-}"
+    printf 'export REVISIONS_DIR=%q\n' "${REVISIONS_DIR:-}"
     printf 'source %q\n' "${SCRIPT_DIR}/runtime.sh"
     printf 'resume_tailor_configure_runtime\n'
     printf 'exec "$NODE_BIN" %q\n' "${SCRIPT_DIR}/native-host.mjs"
@@ -82,7 +89,7 @@ verify_live_health() {
         console.log('  Status:       ', h.status);
         console.log('  Platform:     ', h.isWsl ? 'Windows (WSL)' : h.platform);
         console.log('  Extension ID: ', '${EXT_ID}');
-        console.log('  LaTeX:        ', h.latex?.installed ? h.latex.compiler : 'MISSING (install MacTeX/BasicTeX on macOS or TeX Live on Linux/WSL)');
+        console.log('  LaTeX:        ', h.latex?.installed ? h.latex.compiler : 'MISSING (rerun scripts/setup.sh)');
         for (const agent of h.agents || []) {
           console.log('  ' + agent.label + ':', agent.message);
         }
@@ -99,7 +106,7 @@ install_macos() {
   uid_num="$(id -u)"
   plist_dir="${HOME}/Library/LaunchAgents"
   plist_path="${plist_dir}/${LAUNCHD_LABEL}.plist"
-  log_dir="${HOME}/Library/Logs/resume-tailor"
+  log_dir="${PAINT_IT_BLACK_LOG_DIR:-${HOME}/Library/Logs/resume-tailor}"
   runtime_path="$(dirname "${NODE_BIN}"):/opt/homebrew/bin:/usr/local/bin:/Library/TeX/texbin:${HOME}/.gemini/bin:${HOME}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
   echo "[1/3] Installing macOS LaunchAgent (${LAUNCHD_LABEL})..."
@@ -108,11 +115,11 @@ install_macos() {
   launchctl bootout "gui/${uid_num}/${LAUNCHD_LABEL}" >/dev/null 2>&1 || true
   sleep 0.3
 
-  "${NODE_BIN}" - "${plist_path}" "${PROJECT_DIR}" "${LAUNCHD_LABEL}" "${PORT}" "${runtime_path}" "${log_dir}/server.log" "${NODE_BIN}" "${FNM_DIR:-}" "${XDG_DATA_HOME:-}" <<'NODE'
+  "${NODE_BIN}" - "${plist_path}" "${PROJECT_DIR}" "${LAUNCHD_LABEL}" "${PORT}" "${runtime_path}" "${log_dir}/server.log" "${NODE_BIN}" "${FNM_DIR:-}" "${XDG_DATA_HOME:-}" "${PAINT_IT_BLACK_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/paint-it-black}" "${RESUME_REPO_DIR:-}" "${REVISIONS_DIR:-}" <<'NODE'
 const fs = require('node:fs');
-const [target, projectDir, label, port, runtimePath, logPath, nodeBin, fnmDir, xdgDataHome] = process.argv.slice(2);
+const [target, projectDir, label, port, runtimePath, logPath, nodeBin, fnmDir, xdgDataHome, dataDir, resumeRepoDir, revisionsDir] = process.argv.slice(2);
 const xml = (value) => String(value).replace(/[&<>"']/g, (c) => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;'}[c]));
-const environment = { PORT: port, PATH: runtimePath, NODE_BIN: nodeBin, FNM_DIR: fnmDir, XDG_DATA_HOME: xdgDataHome };
+const environment = { PORT: port, PATH: runtimePath, NODE_BIN: nodeBin, FNM_DIR: fnmDir, XDG_DATA_HOME: xdgDataHome, PAINT_IT_BLACK_DATA_DIR: dataDir, PAINT_IT_BLACK_SERVICE_LABEL: label, RESUME_REPO_DIR: resumeRepoDir, REVISIONS_DIR: revisionsDir };
 fs.writeFileSync(target, `
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -191,7 +198,7 @@ install_linux_systemd() {
 
   cat > "${systemd_user_dir}/resume-tailor.service" <<EOF
 [Unit]
-Description=Resume Tailor Companion Server (Antigravity + TeX Live)
+Description=Paint It Black Companion Server
 After=network.target
 
 [Service]
@@ -201,6 +208,9 @@ Environment=PORT=${PORT}
 Environment="NODE_BIN=${NODE_BIN}"
 Environment="FNM_DIR=${FNM_DIR:-}"
 Environment="XDG_DATA_HOME=${XDG_DATA_HOME:-}"
+Environment="PAINT_IT_BLACK_DATA_DIR=${PAINT_IT_BLACK_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/paint-it-black}"
+Environment="RESUME_REPO_DIR=${RESUME_REPO_DIR:-}"
+Environment="REVISIONS_DIR=${REVISIONS_DIR:-}"
 Environment=PATH=$(dirname "${NODE_BIN}"):${HOME}/.gemini/bin:${HOME}/.local/bin:${HOME}/texlive/2024/bin/x86_64-linux:/usr/local/bin:/usr/bin:/bin
 ExecStart=${PROJECT_DIR}/scripts/start-server.sh
 Restart=always
@@ -222,36 +232,70 @@ EOF
 
 install_wsl() {
   local distro_name linux_user win_appdata win_localappdata wsl_appdata wsl_localappdata
+  local systemd_available=0 launch_script
   distro_name="${WSL_DISTRO_NAME:-Ubuntu-24.04}"
   linux_user="$(id -un)"
 
-  echo "[1/4] Installing WSL systemd user service (resume-tailor.service)..."
-  install_linux_systemd
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
+  echo "[1/4] Preparing WSL companion auto-start..."
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    install_linux_systemd
+    systemd_available=1
+  else
+    echo '  No systemd user bus is available; using the Windows Startup keepalive launcher.'
+  fi
+
+  # Windows login and Native Messaging start fresh WSL processes, so persist
+  # the prepared runtime and data location instead of relying on shell config.
+  mkdir -p "${STATE_DIR}"
+  launch_script="${STATE_DIR}/wsl-launcher.sh"
+  {
+    printf '#!/bin/bash\nset -euo pipefail\n'
+    printf 'export NODE_BIN=%q\n' "${NODE_BIN}"
+    printf 'export FNM_DIR=%q\n' "${FNM_DIR:-}"
+    printf 'export XDG_DATA_HOME=%q\n' "${XDG_DATA_HOME:-}"
+    printf 'export PAINT_IT_BLACK_DATA_DIR=%q\n' "${PAINT_IT_BLACK_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/paint-it-black}"
+    printf 'export PORT=%q\n' "${PORT}"
+    printf 'export RESUME_REPO_DIR=%q\n' "${RESUME_REPO_DIR:-}"
+    printf 'export REVISIONS_DIR=%q\n' "${REVISIONS_DIR:-}"
+    printf 'exec /bin/bash %q --keepalive\n' "${SCRIPT_DIR}/wsl-autostart.sh"
+  } > "${launch_script}"
+  chmod +x "${launch_script}"
 
   echo "[2/4] Installing silent Windows Startup launcher..."
   win_appdata="$(cmd.exe /c "echo %APPDATA%" 2>/dev/null | tr -d '\r\n')"
   win_localappdata="$(cmd.exe /c "echo %LOCALAPPDATA%" 2>/dev/null | tr -d '\r\n')"
+  if [ -z "${win_appdata}" ] || [ -z "${win_localappdata}" ]; then
+    echo 'Error: Windows interop is unavailable. Run setup from a WSL distribution with Windows interop enabled.' >&2
+    return 1
+  fi
   wsl_appdata="$(wslpath -u "${win_appdata}")"
   wsl_localappdata="$(wslpath -u "${win_localappdata}")"
 
   local startup_dir="${wsl_appdata}/Microsoft/Windows/Start Menu/Programs/Startup"
   local vbs_wsl_path="${startup_dir}/ResumeTailorWSL.vbs"
   local vbs_win_path="${win_appdata}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\ResumeTailorWSL.vbs"
-
-  mkdir -p "${startup_dir}"
-  cat > "${vbs_wsl_path}" <<EOF
-Set shell = CreateObject("WScript.Shell")
-shell.Run "wsl.exe -d ${distro_name} -u ${linux_user} -- ${PROJECT_DIR}/scripts/wsl-autostart.sh --keepalive", 0, False
-EOF
-
-  echo "[3/4] Installing Chrome Native Messaging on-demand auto-waker..."
   local native_wsl_dir="${wsl_localappdata}/ResumeTailor"
   local native_win_dir="${win_localappdata}\\ResumeTailor"
-  mkdir -p "${native_wsl_dir}"
 
+  mkdir -p "${startup_dir}" "${native_wsl_dir}"
+  "${NODE_BIN}" - "${vbs_wsl_path}" "${native_wsl_dir}/native-host.ps1" "${distro_name}" "${linux_user}" "${launch_script}" "${vbs_win_path}" <<'NODE'
+const fs = require('node:fs');
+const [vbsFile, psFile, distro, user, launcher, vbsPath] = process.argv.slice(2);
+const winArg = (value) => '"' + value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"';
+const args = ['-d', distro, '-u', user, '--', '/bin/bash', launcher].map(winArg).join(' ');
+const command = 'wsl.exe ' + args;
+const psString = (value) => "'" + value.replaceAll("'", "''") + "'";
+fs.writeFileSync(vbsFile, 'Set shell = CreateObject("WScript.Shell")\n' +
+  'shell.Run "' + command.replaceAll('"', '""') + '", 0, False\n');
+fs.writeFileSync(psFile, '$vbsPath = ' + psString(vbsPath) + '\n$wslArgs = ' + psString(args) + '\n');
+NODE
+
+  echo "[3/4] Installing Chrome Native Messaging on-demand auto-waker..."
   printf '@echo off\r\npowershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%%~dp0native-host.ps1"\r\n' > "${native_wsl_dir}/native-host.cmd"
 
-  cat > "${native_wsl_dir}/native-host.ps1" <<EOF
+  cat >> "${native_wsl_dir}/native-host.ps1" <<EOF
 \$ErrorActionPreference = 'SilentlyContinue'
 \$ProgressPreference = 'SilentlyContinue'
 
@@ -304,11 +348,10 @@ if (Test-Health \$healthUrl) {
   exit 0
 }
 
-\$vbsPath = '${vbs_win_path}'
 if (Test-Path \$vbsPath) {
   \$null = Start-Process -FilePath 'wscript.exe' -ArgumentList ('//B //Nologo "' + \$vbsPath + '"') -WindowStyle Hidden
 } else {
-  \$null = Start-Process -FilePath 'wsl.exe' -ArgumentList '-d ${distro_name} -u ${linux_user} -- ${PROJECT_DIR}/scripts/wsl-autostart.sh --keepalive' -WindowStyle Hidden
+  \$null = Start-Process -FilePath 'wsl.exe' -ArgumentList \$wslArgs -WindowStyle Hidden
 }
 
 \$ready = \$false
@@ -348,11 +391,18 @@ EOF
   fi
 
   echo "[4/4] Verifying live server health..."
+  if [ "${systemd_available}" -eq 0 ]; then
+    nohup /bin/bash "${launch_script}" >> "${STATE_DIR}/server.log" 2>&1 </dev/null &
+  fi
   verify_live_health
 
   echo ""
   echo "Windows + WSL auto-start setup complete!"
-  echo "  - WSL systemd service:   resume-tailor.service (enabled & running)"
+  if [ "${systemd_available}" -eq 1 ]; then
+    echo "  - WSL systemd service:   resume-tailor.service (enabled & running)"
+  else
+    echo "  - WSL auto-start:        Windows Startup + keepalive (no systemd user bus)"
+  fi
   echo "  - Windows Startup VBS:   ${vbs_win_path}"
   echo "  - Chrome Native Host:    HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${HOST_NAME}"
 }

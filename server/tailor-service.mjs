@@ -300,6 +300,8 @@ export class TailorService {
       host: this.config.host,
       port: this.config.port,
       resumeRepoDir: this.config.resumeRepoDir,
+      resumeConfigured: Boolean(this.config.resumeConfigured),
+      resumeSource: this.config.resumeSource || null,
       hasSkillDoc,
       masters,
       latex,

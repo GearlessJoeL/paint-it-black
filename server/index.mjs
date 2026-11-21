@@ -6,6 +6,7 @@ import { URL, pathToFileURL } from 'node:url';
 import { buildToolEnv, loadConfig } from './config.mjs';
 import { createDefaultRegistry } from './agents/registry.mjs';
 import { TailorService } from './tailor-service.mjs';
+import { createResumeSetup } from './resume-setup.mjs';
 
 function isAllowedOrigin(origin) {
   if (!origin) return true; // Direct local CLI / curl / non-browser client
@@ -73,6 +74,7 @@ export function createCompanionServer({ config: customConfig, registry: customRe
   const env = buildToolEnv(config);
   const registry = customRegistry || createDefaultRegistry({ config, env });
   const service = new TailorService({ config, registry });
+  const resumeSetup = createResumeSetup({ config, registry });
 
   const server = http.createServer(async (req, res) => {
     const origin = req.headers.origin;
@@ -95,6 +97,33 @@ export function createCompanionServer({ config: customConfig, registry: customRe
     try {
       if (req.method === 'GET' && pathname === '/api/ping') {
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/setup/status') {
+        sendJson(res, 200, await resumeSetup.getStatus());
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/setup/resume/pdf') {
+        if (!config.resumeConfigured) {
+          sendJson(res, 404, { error: 'Choose and import your resume first.' });
+          return;
+        }
+        const bytes = await fs.readFile(path.join(config.resumeRepoDir, 'resume.pdf'));
+        res.writeHead(200, {
+          'Content-Type': 'application/pdf', 'Content-Length': bytes.length,
+          'Content-Disposition': 'inline; filename="resume.pdf"', 'Cache-Control': 'no-store',
+        });
+        res.end(bytes);
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/setup/resume') {
+        const body = await readJsonBody(req, 12 * 1024 * 1024);
+        const imported = await resumeSetup.importResume(body);
+        service.env = buildToolEnv(config);
+        sendJson(res, 200, imported);
         return;
       }
 
