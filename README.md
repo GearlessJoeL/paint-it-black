@@ -12,6 +12,23 @@ A Manifest V3 Chrome extension + cross-platform local companion server (supports
 
 *No subscriptions. No colors anymore. Just open a job tab, click Generate, and ship.*
 
+## See it in action
+
+A chat edit rewrites Jane Doe's first McDonald's bullet to emphasize accurate
+cash and card payments. The GIF shows the actual compiled PDF before and after
+the edit; the resume remains one page.
+
+![Before and after a chat edit to the fictional Jane Doe resume](docs/screenshots/resume-edit.gif)
+
+<details>
+<summary>View the complete one-page PDF preview</summary>
+
+![Generated one-page resume preview using fictional Jane Doe details](docs/screenshots/resume-preview.png)
+
+</details>
+
+All examples use the [fictional resume sample](resume-sample/).
+
 ## Architecture
 
 ```
@@ -72,6 +89,10 @@ user through this one-time step, then resume selection and backend configuration
    LaTeX resume**. PDF imports are converted by that backend into editable LaTeX.
 5. Setup verifies a one-page PDF before activating the imported master. Open a job
    posting, generate a tailored draft, review the PDF, and save it.
+
+Choose a backend and import your own PDF or LaTeX resume in the setup page:
+
+<img src="docs/screenshots/onboarding.png" alt="Paint It Black setup showing a connected companion, live Codex model selection, and the required PDF or LaTeX resume file picker" width="640">
 
 If you loaded the extension before running the companion installer, keep its setup
 page open and click **Reconnect** when installation finishes. For an unpacked
