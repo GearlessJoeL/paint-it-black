@@ -110,7 +110,6 @@ const els = {
 
   settingsDialog: document.getElementById('settings-dialog'),
   settingsForm: document.getElementById('settings-form'),
-  masterRadioContainer: document.getElementById('master-radio-container'),
   agentSelect: document.getElementById('agent-select'),
   modelSelect: document.getElementById('model-select'),
   modelDiscoveryHint: document.getElementById('model-discovery-hint'),
@@ -575,7 +574,7 @@ function renderFolderState() {
 
 async function loadSettings() {
   const stored = await chrome.storage.local.get(['settings', 'cachedHealthAgents']);
-  state.settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
+  state.settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}), masterResume: 'auto' };
   if (!state.health && Array.isArray(stored.cachedHealthAgents) && stored.cachedHealthAgents.length > 0) {
     state.health = { agents: stored.cachedHealthAgents };
     renderAgentsAndModels(stored.cachedHealthAgents);
@@ -589,10 +588,6 @@ async function loadSettings() {
   els.apiBaseUrlInput.value = state.settings.apiBaseUrl || '';
   els.customModelInput.value = state.settings.customModel || '';
 
-  const masterRadio = els.settingsForm.querySelector(
-    `input[name="masterResume"][value="${CSS.escape(state.settings.masterResume || 'auto')}"]`,
-  );
-  if (masterRadio) masterRadio.checked = true;
   renderComposerPills();
 }
 
@@ -611,35 +606,6 @@ function setConnectionStatus(connState, shortLabel, alertText = '') {
   } else {
     els.alertStrip.hidden = true;
     els.alertStripText.textContent = '';
-  }
-}
-
-function renderMasters(masters = []) {
-  const currentSelected = state.settings.masterResume || 'auto';
-  els.masterRadioContainer.replaceChildren();
-
-  const options = [
-    { value: 'auto', label: 'Auto-detect from job description' },
-    ...masters.map((m) => ({ value: m.filename, label: m.label })),
-  ];
-
-  for (const opt of options) {
-    const row = document.createElement('div');
-    row.className = 'radio-row';
-
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'masterResume';
-    input.value = opt.value;
-    input.id = `master-opt-${opt.value.replace(/[^a-z0-9]/gi, '-')}`;
-    input.checked = opt.value === currentSelected;
-
-    const label = document.createElement('label');
-    label.htmlFor = input.id;
-    label.textContent = opt.label;
-
-    row.append(input, label);
-    els.masterRadioContainer.append(row);
   }
 }
 
@@ -869,9 +835,6 @@ async function applyHealthResponse(health) {
 
   state.health = health;
   els.settingRepoPath.textContent = health.resumeRepoDir || '~/code/resume';
-  if (Array.isArray(health.masters) && health.masters.length > 0) {
-    renderMasters(health.masters);
-  }
   if (Array.isArray(health.agents) && health.agents.length > 0) {
     renderAgentsAndModels(health.agents);
     const agyAgent = health.agents.find((a) => a.id === 'antigravity');
@@ -1679,7 +1642,7 @@ async function handleOneClickGenerate() {
       sourceUrl: state.sourceUrl,
       jobDescription: jd,
       userPrompt: '',
-      masterResume: state.settings.masterResume || 'auto',
+      masterResume: 'auto',
       agentId: state.settings.agentId || 'antigravity',
       model: getEffectiveModel(),
       effort: state.settings.effort || '',
@@ -1724,7 +1687,7 @@ async function handleChatSubmit(event) {
       pageTitle: state.pageTitle,
       sourceUrl: state.sourceUrl,
       jobDescription: els.jdTextarea.value.trim(),
-      masterResume: state.settings.masterResume || 'auto',
+      masterResume: 'auto',
       agentId: state.settings.agentId || 'antigravity',
       model: getEffectiveModel(),
       effort: state.settings.effort || '',
@@ -2153,10 +2116,6 @@ function wireEvents() {
       els.agentSelect.value = state.settings.agentId;
     }
     renderModelOptionsForAgent(els.agentSelect.value || 'antigravity', state.settings.model, state.settings.effort);
-    const radio = els.settingsForm.querySelector(
-      `input[name="masterResume"][value="${CSS.escape(state.settings.masterResume || 'auto')}"]`,
-    );
-    if (radio) radio.checked = true;
     els.settingsDialog.showModal();
 
     const selectedHealth = state.health?.agents?.find((a) => a.id === els.agentSelect.value);
@@ -2185,11 +2144,8 @@ function wireEvents() {
     els.settingsDialog.returnValue = '';
     if (val !== 'save') return;
 
-    const masterResume =
-      els.settingsForm.querySelector('input[name="masterResume"]:checked')?.value || 'auto';
     await saveSettings({
       serverUrl: normalizeServerUrl(els.settingServerUrl.value) || DEFAULT_SETTINGS.serverUrl,
-      masterResume,
       agentId: els.agentSelect.value || 'antigravity',
       model: els.modelSelect.value || '',
       customModel: els.customModelInput.value.trim(),

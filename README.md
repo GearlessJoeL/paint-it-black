@@ -14,11 +14,13 @@ A Manifest V3 Chrome extension + cross-platform local companion server (supports
 
 ## See it in action
 
-A chat edit rewrites Jane Doe's first McDonald's bullet to emphasize accurate
-cash and card payments. The GIF shows the actual compiled PDF before and after
-the edit; the resume remains one page.
+Open a job posting, generate a tailored resume, refine it in the side-panel chat,
+and save the PDF—all from the actual Chrome extension.
 
-![Before and after a chat edit to the fictional Jane Doe resume](docs/screenshots/resume-edit.gif)
+![Paint It Black side-panel workflow: open a job posting, generate, edit, and save a resume](docs/screenshots/sidepanel-workflow.gif)
+
+*Recorded with the fictional Jane Doe resume and a demo job posting. AI processing
+waits are shortened. [View the walkthrough at full size](docs/screenshots/sidepanel-workflow.gif).*
 
 <details>
 <summary>View the complete one-page PDF preview</summary>
@@ -222,7 +224,7 @@ does not send a generation prompt.
    - **Q&A** (e.g., *"What skills am I missing?"*, *"Draft a recruiter DM"*) — answered in chat without modifying your PDF.
    - **Fast Bullet Edits** (e.g., *"Make bullet 2 more concise"*, *"Emphasize Go and Kubernetes"*) — uses targeted slot updates for low latency, recompiles a verified 1-page PDF, increments the revision (`v1` → `v2`…), and live-refreshes the preview window.
    - **Full Structural Edits** (e.g., *"Remove the Publications section and add a new Work Experience entry for …"*) — automatically switches to full-LaTeX edit mode so the model can add/remove/reorder sections, roles, or projects directly.
-5. Use the top-right **Reconnect (`↻`)**, **History**, and **Settings** buttons to reconnect/re-warm local CLI clients, reopen saved drafts, pick a direct save folder, switch master resumes, or configure your AI backend, **Model**, and **Reasoning effort** independently.
+5. Use the top-right **Reconnect (`↻`)**, **History**, and **Settings** buttons to reconnect/re-warm local CLI clients, reopen saved drafts, pick a direct save folder, or configure your AI backend, **Model**, and **Reasoning effort** independently.
 
 ## Where Files Are Saved
 
