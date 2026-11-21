@@ -236,24 +236,11 @@
     flex-shrink: 0;
   }
 
-  .brand {
+  .status-area {
     display: flex;
     align-items: center;
     gap: 8px;
     min-inline-size: 0;
-  }
-
-  .brand-icon {
-    flex-shrink: 0;
-    border-radius: 4px;
-    filter: grayscale(1) contrast(1.15);
-  }
-
-  .brand h1 {
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: -0.015em;
-    white-space: nowrap;
   }
 
   /* Quiet native-style status indicator */

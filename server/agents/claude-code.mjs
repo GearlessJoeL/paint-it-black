@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import { extractJsonObject } from './antigravity.mjs';
+import { discoverClaudeModels } from './claude-models.mjs';
 
 const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\r/g;
 const AUTH_ERROR_RE =
@@ -9,36 +10,38 @@ const AUTH_ERROR_RE =
 const STATUS_CACHE_TTL_MS = 120_000;
 const MAX_SESSIONS = 8;
 
-const DEFAULT_CLAUDE_MODELS = [
-  { id: 'sonnet', label: 'sonnet (Claude Sonnet — recommended)' },
-  { id: 'haiku', label: 'haiku (Claude Haiku — fastest)' },
-  { id: 'opus', label: 'opus (Claude Opus — highest quality)' },
-];
-
 function stripAnsi(text) {
   return String(text || '').replace(ANSI_RE, '');
 }
 
 export class ClaudeCodeCliAdapter {
-  constructor({ binaryPath, env }) {
+  constructor({ binaryPath, env, modelDiscoveryTimeoutMs = 10_000 }) {
     this.id = 'claude';
     this.label = 'Claude Code CLI (claude)';
     this.description = 'Runs local Claude Code CLI (`claude -p`) using your Claude subscription or ANTHROPIC_API_KEY.';
     this.binaryPath = binaryPath;
     this.env = env;
+    this.modelDiscoveryTimeoutMs = modelDiscoveryTimeoutMs;
 
     this.statusCache = null;
     this.statusCachedAt = 0;
     this.statusInFlight = null;
+    this.statusGeneration = 0;
+    this.statusProbeCancels = new Set();
     this.sessionIds = new Map();
   }
 
   invalidateStatusCache() {
+    this.statusGeneration += 1;
     this.statusCache = null;
     this.statusCachedAt = 0;
+    this.statusInFlight = null;
   }
 
   async checkStatus({ forceRefresh = false } = {}) {
+    if (this.statusInFlight) {
+      return this.statusInFlight;
+    }
     if (
       !forceRefresh &&
       this.statusCache &&
@@ -47,13 +50,41 @@ export class ClaudeCodeCliAdapter {
     ) {
       return this.statusCache;
     }
-    if (this.statusInFlight && !forceRefresh) {
-      return this.statusInFlight;
-    }
-    this.statusInFlight = this.#probeVersion().finally(() => {
-      this.statusInFlight = null;
+    const generation = this.statusGeneration;
+    const pending = this.#probeStatus(generation).then((result) => {
+      if (generation === this.statusGeneration && result.installed) {
+        this.statusCache = result;
+        this.statusCachedAt = Date.now();
+      }
+      return result;
+    }).finally(() => {
+      if (this.statusInFlight === pending) this.statusInFlight = null;
     });
-    return this.statusInFlight;
+    this.statusInFlight = pending;
+    return pending;
+  }
+
+  async #probeStatus(generation) {
+    const status = await this.#probeVersion();
+    if (!status.installed || !status.authenticated || generation !== this.statusGeneration) return status;
+    try {
+      const models = await discoverClaudeModels({
+        binaryPath: this.binaryPath,
+        env: this.env,
+        timeoutMs: this.modelDiscoveryTimeoutMs,
+        onCancel: (cancel) => {
+          this.statusProbeCancels.add(cancel);
+          return () => this.statusProbeCancels.delete(cancel);
+        },
+      });
+      return { ...status, models, modelsSource: 'live', modelsDiscoveredAt: new Date().toISOString() };
+    } catch (error) {
+      return {
+        ...status, models: [], modelsSource: 'unavailable', modelDiscoveryError: error.message,
+        authenticated: AUTH_ERROR_RE.test(error.message) ? false : status.authenticated,
+        message: `${status.message}. ${error.message}`,
+      };
+    }
   }
 
   async #probeVersion() {
@@ -67,7 +98,9 @@ export class ClaudeCodeCliAdapter {
         installed: false,
         authenticated: false,
         binaryPath: this.binaryPath,
-        models: DEFAULT_CLAUDE_MODELS,
+        models: [],
+        modelsSource: 'unavailable',
+        modelDiscoveryError: 'Claude Code CLI is not installed.',
         message: 'Claude Code CLI not found. Install it (`npm i -g @anthropic-ai/claude-code`) or set CLAUDE_BIN.',
       };
     }
@@ -90,10 +123,6 @@ export class ClaudeCodeCliAdapter {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        if (result.installed) {
-          this.statusCache = result;
-          this.statusCachedAt = Date.now();
-        }
         resolve(result);
       };
 
@@ -107,7 +136,9 @@ export class ClaudeCodeCliAdapter {
           installed: true,
           authenticated: false,
           binaryPath: this.binaryPath,
-          models: DEFAULT_CLAUDE_MODELS,
+          models: [],
+          modelsSource: 'unavailable',
+          modelDiscoveryError: 'Timed out probing `claude --version`.',
           message: 'Timed out probing `claude --version`.',
         });
       }, 5000);
@@ -126,7 +157,9 @@ export class ClaudeCodeCliAdapter {
           installed: false,
           authenticated: false,
           binaryPath: this.binaryPath,
-          models: DEFAULT_CLAUDE_MODELS,
+          models: [],
+          modelsSource: 'unavailable',
+          modelDiscoveryError: 'Could not start Claude Code CLI.',
           message: `Failed to run claude: ${err.message}`,
         });
       });
@@ -139,7 +172,9 @@ export class ClaudeCodeCliAdapter {
           installed: code === 0,
           authenticated: code === 0,
           binaryPath: this.binaryPath,
-          models: DEFAULT_CLAUDE_MODELS,
+          models: [],
+          modelsSource: 'unavailable',
+          modelDiscoveryError: code === 0 ? undefined : 'Claude Code version probe failed.',
           message: code === 0 ? `Ready (${version || 'claude'})` : version || `claude exited with code ${code}`,
         });
       });
@@ -147,12 +182,9 @@ export class ClaudeCodeCliAdapter {
   }
 
   #resolveModelAndEffort({ model = '', effort = '' } = {}) {
-    if (model === 'cli-default') {
-      return { modelArg: '', effortArg: effort || '' };
-    }
     return {
-      modelArg: model || 'sonnet',
-      effortArg: effort || 'low',
+      modelArg: model === 'cli-default' ? '' : model || '',
+      effortArg: effort || '',
     };
   }
 
@@ -326,6 +358,8 @@ export class ClaudeCodeCliAdapter {
   }
 
   dispose() {
+    for (const cancel of this.statusProbeCancels) cancel();
+    this.invalidateStatusCache();
     this.sessionIds.clear();
   }
 }

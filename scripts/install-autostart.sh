@@ -9,29 +9,9 @@ PORT="${PORT:-8787}"
 OS_NAME="$(uname -s)"
 STATE_DIR="${HOME}/.local/state/resume-tailor"
 
-# Discover Node/Homebrew binaries even when run from non-login shells
-for d in "/opt/homebrew/bin" "/usr/local/bin" "${HOME}/.volta/bin" "${HOME}/.local/bin"; do
-  if [ -d "${d}" ]; then
-    case ":${PATH}:" in
-      *":${d}:"*) ;;
-      *) PATH="${d}:${PATH}" ;;
-    esac
-  fi
-done
-if ! command -v node >/dev/null 2>&1 && [ -d "${HOME}/.nvm/versions/node" ]; then
-  for nvm_bin in "${HOME}"/.nvm/versions/node/*/bin; do
-    if [ -x "${nvm_bin}/node" ]; then
-      PATH="${nvm_bin}:${PATH}"
-    fi
-  done
-fi
-export PATH
-
-NODE_BIN="${NODE_BIN:-$(command -v node || true)}"
-if [ -z "${NODE_BIN}" ] || [ ! -x "${NODE_BIN}" ]; then
-  echo "Error: Node.js (>=20) is required but was not found on PATH." >&2
-  exit 1
-fi
+source "${SCRIPT_DIR}/runtime.sh"
+resume_tailor_configure_runtime
+echo "Using Node.js $("${NODE_BIN}" --version): ${NODE_BIN}"
 
 chmod +x "${PROJECT_DIR}/scripts/start-server.sh" "${PROJECT_DIR}/scripts/native-host.mjs"
 if [ -f "${PROJECT_DIR}/scripts/wsl-autostart.sh" ]; then
@@ -39,7 +19,7 @@ if [ -f "${PROJECT_DIR}/scripts/wsl-autostart.sh" ]; then
 fi
 
 # Compute deterministic Extension ID from manifest.json "key"
-EXT_ID="$(${NODE_BIN} -e "
+EXT_ID="$("${NODE_BIN}" -e "
   const crypto = require('node:crypto');
   const fs = require('node:fs');
   const manifest = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
@@ -51,16 +31,16 @@ EXT_ID="$(${NODE_BIN} -e "
 
 write_posix_native_wrapper() {
   mkdir -p "${STATE_DIR}"
-  cat > "${STATE_DIR}/native-host.sh" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-export PATH="/opt/homebrew/bin:/usr/local/bin:\${HOME}/.local/bin:\${PATH}"
-NODE_EXEC="${NODE_BIN}"
-if [ ! -x "\${NODE_EXEC}" ]; then
-  NODE_EXEC="\$(command -v node || true)"
-fi
-exec "\${NODE_EXEC}" "${PROJECT_DIR}/scripts/native-host.mjs"
-EOF
+  {
+    printf '#!/usr/bin/env bash\nset -euo pipefail\n'
+    printf 'export NODE_BIN=%q\n' "${NODE_BIN}"
+    printf 'export FNM_DIR=%q\n' "${FNM_DIR:-}"
+    printf 'export XDG_DATA_HOME=%q\n' "${XDG_DATA_HOME:-}"
+    printf 'export PORT=%q\n' "${PORT}"
+    printf 'source %q\n' "${SCRIPT_DIR}/runtime.sh"
+    printf 'resume_tailor_configure_runtime\n'
+    printf 'exec "$NODE_BIN" %q\n' "${SCRIPT_DIR}/native-host.mjs"
+  } > "${STATE_DIR}/native-host.sh"
   chmod +x "${STATE_DIR}/native-host.sh"
 }
 
@@ -68,17 +48,17 @@ write_native_manifest_json() {
   local target_dir="$1"
   local host_exec_path="$2"
   mkdir -p "${target_dir}"
-  cat > "${target_dir}/${HOST_NAME}.json" <<EOF
-{
-  "name": "${HOST_NAME}",
-  "description": "Auto-starts the Resume Tailor companion server on demand",
-  "path": "${host_exec_path}",
-  "type": "stdio",
-  "allowed_origins": [
-    "chrome-extension://${EXT_ID}/"
-  ]
-}
-EOF
+  "${NODE_BIN}" - "${target_dir}/${HOST_NAME}.json" "${HOST_NAME}" "${host_exec_path}" "${EXT_ID}" <<'NODE'
+const fs = require('node:fs');
+const [target, name, hostPath, extensionId] = process.argv.slice(2);
+fs.writeFileSync(target, JSON.stringify({
+  name,
+  description: 'Auto-starts the Resume Tailor companion server on demand',
+  path: hostPath,
+  type: 'stdio',
+  allowed_origins: [`chrome-extension://${extensionId}/`],
+}, null, 2) + '\n');
+NODE
 }
 
 verify_live_health() {
@@ -96,14 +76,16 @@ verify_live_health() {
   done
 
   "${NODE_BIN}" -e "
-    fetch('http://127.0.0.1:${PORT}/api/health')
+    fetch('http://127.0.0.1:${PORT}/api/health', { signal: AbortSignal.timeout(15000) })
       .then((r) => r.json())
       .then((h) => {
         console.log('  Status:       ', h.status);
         console.log('  Platform:     ', h.isWsl ? 'Windows (WSL)' : h.platform);
         console.log('  Extension ID: ', '${EXT_ID}');
         console.log('  LaTeX:        ', h.latex?.installed ? h.latex.compiler : 'MISSING (install MacTeX/BasicTeX on macOS or TeX Live on Linux/WSL)');
-        console.log('  Antigravity:  ', h.agents?.[0]?.authenticated ? 'Signed in & ready' : 'Sign-in needed (run ~/.gemini/bin/agy once)');
+        for (const agent of h.agents || []) {
+          console.log('  ' + agent.label + ':', agent.message);
+        }
       })
       .catch((e) => {
         console.error('Health check failed:', e.message);
@@ -118,47 +100,49 @@ install_macos() {
   plist_dir="${HOME}/Library/LaunchAgents"
   plist_path="${plist_dir}/${LAUNCHD_LABEL}.plist"
   log_dir="${HOME}/Library/Logs/resume-tailor"
-  runtime_path="/opt/homebrew/bin:/usr/local/bin:/Library/TeX/texbin:${HOME}/.gemini/bin:${HOME}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  runtime_path="$(dirname "${NODE_BIN}"):/opt/homebrew/bin:/usr/local/bin:/Library/TeX/texbin:${HOME}/.gemini/bin:${HOME}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
   echo "[1/3] Installing macOS LaunchAgent (${LAUNCHD_LABEL})..."
   mkdir -p "${plist_dir}" "${log_dir}" "${STATE_DIR}"
 
   launchctl bootout "gui/${uid_num}/${LAUNCHD_LABEL}" >/dev/null 2>&1 || true
-  pkill -f '[n]ode server/index\.mjs' >/dev/null 2>&1 || true
   sleep 0.3
 
-  cat > "${plist_path}" <<EOF
+  "${NODE_BIN}" - "${plist_path}" "${PROJECT_DIR}" "${LAUNCHD_LABEL}" "${PORT}" "${runtime_path}" "${log_dir}/server.log" "${NODE_BIN}" "${FNM_DIR:-}" "${XDG_DATA_HOME:-}" <<'NODE'
+const fs = require('node:fs');
+const [target, projectDir, label, port, runtimePath, logPath, nodeBin, fnmDir, xdgDataHome] = process.argv.slice(2);
+const xml = (value) => String(value).replace(/[&<>"']/g, (c) => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;'}[c]));
+const environment = { PORT: port, PATH: runtimePath, NODE_BIN: nodeBin, FNM_DIR: fnmDir, XDG_DATA_HOME: xdgDataHome };
+fs.writeFileSync(target, `
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>${LAUNCHD_LABEL}</string>
+  <string>${xml(label)}</string>
   <key>WorkingDirectory</key>
-  <string>${PROJECT_DIR}</string>
+  <string>${xml(projectDir)}</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>${PROJECT_DIR}/scripts/start-server.sh</string>
+    <string>${xml(projectDir)}/scripts/start-server.sh</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PORT</key>
-    <string>${PORT}</string>
-    <key>PATH</key>
-    <string>${runtime_path}</string>
+${Object.entries(environment).map(([key, value]) => `    <key>${key}</key>\n    <string>${xml(value)}</string>`).join('\n')}
   </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>${log_dir}/server.log</string>
+  <string>${xml(logPath)}</string>
   <key>StandardErrorPath</key>
-  <string>${log_dir}/server.log</string>
+  <string>${xml(logPath)}</string>
 </dict>
 </plist>
-EOF
+`.trimStart());
+NODE
 
   if ! launchctl bootstrap "gui/${uid_num}" "${plist_path}" >/dev/null 2>&1; then
     launchctl load -w "${plist_path}"
@@ -182,6 +166,17 @@ EOF
 
   echo "[3/3] Verifying live server health..."
   verify_live_health
+  # A manually started companion can answer health checks while launchd fails
+  # with EADDRINUSE. Do not report that auto-start is installed successfully.
+  local service_state
+  service_state="$(launchctl print "gui/${uid_num}/${LAUNCHD_LABEL}")"
+  case "${service_state}" in
+    *"state = running"*) ;;
+    *)
+      echo "Error: The companion responds, but its LaunchAgent is not running. Stop any manually started companion and rerun setup. Check ${log_dir}/server.log." >&2
+      return 1
+      ;;
+  esac
 
   echo ""
   echo "macOS auto-start setup complete!"
@@ -203,6 +198,9 @@ After=network.target
 Type=simple
 WorkingDirectory=${PROJECT_DIR}
 Environment=PORT=${PORT}
+Environment="NODE_BIN=${NODE_BIN}"
+Environment="FNM_DIR=${FNM_DIR:-}"
+Environment="XDG_DATA_HOME=${XDG_DATA_HOME:-}"
 Environment=PATH=$(dirname "${NODE_BIN}"):${HOME}/.gemini/bin:${HOME}/.local/bin:${HOME}/texlive/2024/bin/x86_64-linux:/usr/local/bin:/usr/bin:/bin
 ExecStart=${PROJECT_DIR}/scripts/start-server.sh
 Restart=always
@@ -217,7 +215,6 @@ EOF
 
   systemctl --user daemon-reload
   systemctl --user stop resume-tailor.service >/dev/null 2>&1 || true
-  pkill -f '[n]ode server/index\.mjs' >/dev/null 2>&1 || true
   sleep 0.3
   systemctl --user enable resume-tailor.service
   systemctl --user restart resume-tailor.service

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Resume Tailor — Local AI",
+  "name": "Paint It Black",
   "version": "1.0.0",
   "description": "Tailor your local LaTeX resume to any job description using local AI CLIs (Antigravity, Claude Code, Codex) or your own API key on Windows (WSL) or macOS.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqidtfXbB57piYhCPfggJr1nS0G5aZrI1QCSodHKXLKgahNEvE7ka8/Y5MJ16sDq9WeuAKZHZ8a8aw/Euxdivgz0svX5TVlqOlt+iz/jpF64zCN9RShcY+8JDkY6AYF8ZwnJJfQEJjSEuknyIp535OVv1P+4wu9KHBSvl3mxKQdA06S+qcW20hf3v2zXIXo4FLwMi7pMTBJtjXvbDLtw+uPGeHoc41i6ZfQiXd8tc2msqHgkT+WxWN7LYxu+6mRrn4iYnIvh/AozsuWYjcrvYLn7XLBr2JTelxQEFRlxe/BtZ+7cJzUXROc9pWFG56DMV9qap6cO+fUv2wFDzCbhXaQIDAQAB",
@@ -10,7 +10,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Open Resume Tailor Sidebar",
+    "default_title": "Open Paint It Black",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",
@@ -43,7 +43,7 @@
         "default": "Ctrl+Shift+Y",
         "mac": "Command+Shift+Y"
       },
-      "description": "Open the Resume Tailor side panel"
+      "description": "Open the Paint It Black side panel"
     }
   }
 }

@@ -6,6 +6,7 @@ import {
   requestFolderPermission,
   writePdfToFolder,
 } from './folder-store.js';
+import { getCliEffortOptions, getCliModelHint } from './model-options.js';
 
 const DEFAULT_SETTINGS = {
   serverUrl: 'http://127.0.0.1:8787',
@@ -111,6 +112,7 @@ const els = {
   masterRadioContainer: document.getElementById('master-radio-container'),
   agentSelect: document.getElementById('agent-select'),
   modelSelect: document.getElementById('model-select'),
+  modelDiscoveryHint: document.getElementById('model-discovery-hint'),
   apiSettingsGroup: document.getElementById('api-settings-group'),
   apiProviderSelect: document.getElementById('api-provider-select'),
   apiKeyInput: document.getElementById('api-key-input'),
@@ -536,14 +538,14 @@ function renderComposerPills() {
   }
   const agentName = getActiveAgentDisplayName();
   const effectiveModel = getEffectiveModel();
-  const agyModels = state.health?.agents?.find((a) => a.id === 'antigravity')?.models || [];
-  const matchedAgy = state.settings.agentId === 'antigravity' ? agyModels.find((m) => m.id === effectiveModel) : null;
+  const activeModels = state.health?.agents?.find((a) => a.id === state.settings.agentId)?.models || [];
+  const matchedModel = activeModels.find((m) => m.id === effectiveModel);
   let modelLabel =
     effectiveModel === 'cli-default'
       ? 'CLI default'
-      : matchedAgy?.label || effectiveModel || (state.settings.agentId === 'antigravity' ? 'Auto Fast' : 'default');
+      : matchedModel?.label || effectiveModel || (state.settings.agentId === 'antigravity' ? 'Auto Fast' : 'default');
   if (state.settings.agentId === 'antigravity' && state.settings.effort && effectiveModel !== 'cli-default') {
-    const supportsEffort = !matchedAgy || !Array.isArray(matchedAgy.efforts) || matchedAgy.efforts.length > 0;
+    const supportsEffort = !matchedModel || !Array.isArray(matchedModel.efforts) || matchedModel.efforts.length > 0;
     if (supportsEffort) {
       modelLabel = `${modelLabel} (${state.settings.effort})`;
     }
@@ -649,6 +651,19 @@ function updateEffortOptionsForSelection(preferredEffort = els.settingEffort.val
   els.settingEffort.replaceChildren();
   els.settingEffort.disabled = false;
 
+  if (agentId === 'codex' || agentId === 'claude') {
+    const choices = getCliEffortOptions(selectedAgent, modelId, preferredEffort);
+    for (const choice of choices.options) {
+      const opt = document.createElement('option');
+      opt.value = choice.value;
+      opt.textContent = choice.label;
+      els.settingEffort.append(opt);
+    }
+    els.settingEffort.value = choices.value;
+    els.settingEffort.disabled = choices.disabled;
+    return;
+  }
+
   if (agentId === 'antigravity' && modelId !== 'cli-default') {
     const modelMeta =
       modelId === ''
@@ -706,6 +721,8 @@ function renderModelOptionsForAgent(agentId, preferredModel = '', preferredEffor
   const selectedAgent = agents.find((a) => a.id === agentId) || agents[0];
   const isApi = agentId === 'api';
   els.apiSettingsGroup.hidden = !isApi;
+  els.modelDiscoveryHint.hidden = agentId !== 'codex' && agentId !== 'claude';
+  els.modelDiscoveryHint.textContent = els.modelDiscoveryHint.hidden ? '' : getCliModelHint(selectedAgent);
 
   els.modelSelect.replaceChildren();
 
@@ -784,7 +801,7 @@ function renderModelOptionsForAgent(agentId, preferredModel = '', preferredEffor
   } else {
     const defOpt = document.createElement('option');
     defOpt.value = '';
-    defOpt.textContent = agentId === 'claude' ? 'Recommended (sonnet)' : 'CLI default';
+    defOpt.textContent = 'CLI default';
     els.modelSelect.append(defOpt);
 
     for (const model of selectedAgent?.models || []) {
@@ -2134,8 +2151,8 @@ function wireEvents() {
     if (radio) radio.checked = true;
     els.settingsDialog.showModal();
 
-    const agyHealth = state.health?.agents?.find((a) => a.id === 'antigravity');
-    if (!state.health || !agyHealth?.models?.length) {
+    const selectedHealth = state.health?.agents?.find((a) => a.id === els.agentSelect.value);
+    if (!state.health || (selectedHealth?.id !== 'api' && !selectedHealth?.models?.length)) {
       checkServerHealth({ forceRefresh: true }).catch(() => {});
     }
   };

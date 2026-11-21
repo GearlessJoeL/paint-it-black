@@ -82,7 +82,7 @@ cd paint-it-black
 What it sets up automatically for your OS:
 
 - **On macOS:**
-  1. **LaunchAgent (`~/Library/LaunchAgents/com.local.resume_tailor.server.plist`)** — starts the companion server at login (`RunAtLoad`) and auto-restarts it (`KeepAlive`), automatically discovering Homebrew (`/opt/homebrew/bin`), MacTeX (`/Library/TeX/texbin`), nvm, and local AI CLIs (`agy`, `claude`, `codex`).
+  1. **LaunchAgent (`~/Library/LaunchAgents/com.local.resume_tailor.server.plist`)** — starts the companion server at login (`RunAtLoad`) and auto-restarts it (`KeepAlive`), automatically discovering Homebrew (`/opt/homebrew/bin`), MacTeX (`/Library/TeX/texbin`), fnm, nvm, Volta, and local AI CLIs (`agy`, `claude`, `codex`).
   2. **Chrome Native Messaging auto-waker** (`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.local.resume_tailor.launcher.json`, plus Chromium/Edge/Brave if installed) — wakes the server on demand when opening the sidebar.
 - **On Windows (WSL2):**
   1. **WSL `systemd --user` service** (`resume-tailor.service`, `Restart=always`).
@@ -95,6 +95,26 @@ To remove all auto-start entries cleanly at any time:
 ./scripts/uninstall-autostart.sh
 ```
 
+Setup finds an installed **Node.js >=20** automatically, including fnm's default
+installation when run from a clean environment. It saves the real Node binary
+path for the background service and browser auto-waker, adds its directory to
+their PATH, and verifies the running companion before reporting completion.
+Temporary `fnm_multishells` paths and shell-profile initialization are not needed.
+If a saved Node version is later removed, startup searches installed supported
+versions again. After pulling this update, rerun `./scripts/install-autostart.sh`
+once to repair an existing installation; no environment settings are required.
+
+Setup reports each AI backend's availability. Sign in to your preferred installed
+CLI or configure an API provider in the extension's Settings to generate resumes.
+Installing a CLI after the companion is already running is supported: click
+**Reconnect** to rediscover installed backends without restarting the companion.
+
+Codex and Claude Code model menus are loaded from the installed CLIs, including
+their supported reasoning efforts. **Reconnect** refreshes these catalogs. If a
+catalog cannot be loaded, Settings shows the discovery error and keeps **CLI
+default** available instead of displaying preset model names. Loading a catalog
+does not send a generation prompt.
+
 *(Prefer running manually instead? Run `./scripts/start-server.sh`.)*
 
 ### 3. Load the Chrome Extension
@@ -104,14 +124,14 @@ To remove all auto-start entries cleanly at any time:
 3. Click **Load unpacked** and select the `extension` directory:
    - **macOS:** `~/code/paint-it-black/extension` (or wherever you cloned this repo)
    - **Windows (via WSL):** `\\wsl$\<Distro>\home\<username>\path\to\extension` (or `\\wsl.localhost\<Distro>\home\<username>\path\to\extension`)
-4. Pin **Resume Tailor — Local AI** to your toolbar.
+4. Pin **Paint It Black** to your toolbar.
    *(When pulling updates, click **Reload** on the extension card in `chrome://extensions`.)*
 
 ### 4. Use It on Any Job Posting
 
 1. Open any job listing (LinkedIn, Greenhouse, Lever, Ashby, Workday, Indeed, or a company careers page).
    - Entering a new job description page automatically resets the sidebar chat and preview session for that job.
-2. Click the **Resume Tailor** toolbar icon (or press `⌘+Shift+Y` on macOS / `Ctrl+Shift+Y` on Windows, or right-click highlighted text → **Tailor Resume for This Job**).
+2. Click the **Paint It Black** toolbar icon (or press `⌘+Shift+Y` on macOS / `Ctrl+Shift+Y` on Windows, or right-click highlighted text → **Tailor Resume for This Job**).
 3. Click **Generate Resume** for a 1-page tailored PDF — the floating **Resume Preview** popup opens beside Chrome while leaving the sidebar open.
 4. Use the **unified chat** at the bottom of the sidebar for Q&A, bullet edits, or full structural changes:
    - **Q&A** (e.g., *"What skills am I missing?"*, *"Draft a recruiter DM"*) — answered in chat without modifying your PDF.

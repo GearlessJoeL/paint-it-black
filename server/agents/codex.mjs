@@ -3,18 +3,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { extractJsonObject } from './antigravity.mjs';
+import { discoverCodexModels } from './codex-models.mjs';
 
 const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\r/g;
 const AUTH_ERROR_RE =
   /not logged in|codex login|authentication required|invalid api key|unauthorized|missing api key|please sign in/i;
 const STATUS_CACHE_TTL_MS = 120_000;
-
-const DEFAULT_CODEX_MODELS = [
-  { id: 'gpt-5.4', label: 'gpt-5.4 (GPT-5.4)' },
-  { id: 'gpt-5.3-codex', label: 'gpt-5.3-codex (Codex)' },
-  { id: 'gpt-5-codex-mini', label: 'gpt-5-codex-mini (Fastest)' },
-  { id: 'o4-mini', label: 'o4-mini (Fast reasoning)' },
-];
 
 function stripAnsi(text) {
   return String(text || '').replace(ANSI_RE, '');
@@ -44,21 +38,25 @@ export function toStrictOpenAiSchema(schema) {
 }
 
 export class CodexCliAdapter {
-  constructor({ binaryPath, env }) {
+  constructor({ binaryPath, env, modelDiscoveryTimeoutMs = 10_000 }) {
     this.id = 'codex';
     this.label = 'Codex CLI (codex)';
     this.description = 'Runs local OpenAI Codex CLI (`codex exec`) using your ChatGPT/Codex login or OPENAI_API_KEY.';
     this.binaryPath = binaryPath;
     this.env = env;
+    this.modelDiscoveryTimeoutMs = modelDiscoveryTimeoutMs;
 
     this.statusCache = null;
     this.statusCachedAt = 0;
     this.statusInFlight = null;
+    this.statusGeneration = 0;
   }
 
   invalidateStatusCache() {
     this.statusCache = null;
     this.statusCachedAt = 0;
+    this.statusGeneration += 1;
+    this.statusInFlight = null;
   }
 
   async checkStatus({ forceRefresh = false } = {}) {
@@ -70,18 +68,48 @@ export class CodexCliAdapter {
     ) {
       return this.statusCache;
     }
-    if (this.statusInFlight && !forceRefresh) {
+    if (this.statusInFlight) {
       return this.statusInFlight;
     }
-    this.statusInFlight = this.#probeVersion().finally(() => {
-      this.statusInFlight = null;
+    const generation = this.statusGeneration;
+    const binaryPath = this.binaryPath;
+    const pending = this.#probeStatus(binaryPath, this.env).then((result) => {
+      if (generation === this.statusGeneration && binaryPath === this.binaryPath && result.installed) {
+        this.statusCache = result;
+        this.statusCachedAt = Date.now();
+      }
+      return result;
+    }).finally(() => {
+      if (this.statusInFlight === pending) this.statusInFlight = null;
     });
-    return this.statusInFlight;
+    this.statusInFlight = pending;
+    return pending;
   }
 
-  async #probeVersion() {
+  async #probeStatus(binaryPath, env) {
+    const status = await this.#probeVersion(binaryPath, env);
+    if (!status.installed || !status.authenticated) return status;
     try {
-      await fs.access(this.binaryPath, fs.constants.X_OK);
+      const models = await discoverCodexModels({ binaryPath, env, timeoutMs: this.modelDiscoveryTimeoutMs });
+      return { ...status, models, modelsSource: 'live', modelDiscoveryError: null };
+    } catch (error) {
+      const authRequired = AUTH_ERROR_RE.test(error.message);
+      return {
+        ...status,
+        authenticated: authRequired ? false : status.authenticated,
+        models: [],
+        modelsSource: 'unavailable',
+        modelDiscoveryError: error.message,
+        message: authRequired
+          ? 'Codex CLI needs sign-in. Run `codex login` in your terminal and reconnect.'
+          : `${status.message} Live model catalog unavailable.`,
+      };
+    }
+  }
+
+  async #probeVersion(binaryPath, env) {
+    try {
+      await fs.access(binaryPath, fs.constants.X_OK);
     } catch {
       return {
         id: this.id,
@@ -89,21 +117,22 @@ export class CodexCliAdapter {
         description: this.description,
         installed: false,
         authenticated: false,
-        binaryPath: this.binaryPath,
-        models: DEFAULT_CODEX_MODELS,
+        binaryPath,
+        models: [],
+        modelsSource: 'unavailable',
         message: 'Codex CLI not found. Install it (`npm i -g @openai/codex`) or set CODEX_BIN.',
       };
     }
 
     return new Promise((resolve) => {
       const spawnOpts = {
-        env: this.env,
+        env,
         stdio: ['ignore', 'pipe', 'pipe'],
       };
-      if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(this.binaryPath)) {
+      if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(binaryPath)) {
         spawnOpts.shell = true;
       }
-      const child = spawn(this.binaryPath, ['--version'], spawnOpts);
+      const child = spawn(binaryPath, ['--version'], spawnOpts);
 
       let stdout = '';
       let stderr = '';
@@ -113,10 +142,6 @@ export class CodexCliAdapter {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        if (result.installed) {
-          this.statusCache = result;
-          this.statusCachedAt = Date.now();
-        }
         resolve(result);
       };
 
@@ -129,8 +154,9 @@ export class CodexCliAdapter {
           description: this.description,
           installed: true,
           authenticated: false,
-          binaryPath: this.binaryPath,
-          models: DEFAULT_CODEX_MODELS,
+          binaryPath,
+          models: [],
+          modelsSource: 'unavailable',
           message: 'Timed out probing `codex --version`.',
         });
       }, 5000);
@@ -148,8 +174,9 @@ export class CodexCliAdapter {
           description: this.description,
           installed: false,
           authenticated: false,
-          binaryPath: this.binaryPath,
-          models: DEFAULT_CODEX_MODELS,
+          binaryPath,
+          models: [],
+          modelsSource: 'unavailable',
           message: `Failed to run codex: ${err.message}`,
         });
       });
@@ -161,8 +188,9 @@ export class CodexCliAdapter {
           description: this.description,
           installed: code === 0,
           authenticated: code === 0,
-          binaryPath: this.binaryPath,
-          models: DEFAULT_CODEX_MODELS,
+          binaryPath,
+          models: [],
+          modelsSource: 'unavailable',
           message: code === 0 ? `Ready (${version || 'codex'})` : version || `codex exited with code ${code}`,
         });
       });
@@ -198,7 +226,7 @@ export class CodexCliAdapter {
     if (model && model !== 'cli-default') {
       args.push('--model', model);
     }
-    const effortVal = effort || (model === 'cli-default' ? '' : 'low');
+    const effortVal = effort || '';
     if (effortVal) {
       args.push('-c', `model_reasoning_effort="${effortVal}"`);
     }

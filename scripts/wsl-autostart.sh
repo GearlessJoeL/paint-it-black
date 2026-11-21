@@ -10,7 +10,8 @@ PORT="${PORT:-8787}"
 HEALTH_URL="http://127.0.0.1:${PORT}/api/ping"
 MODE="${1:---keepalive}"
 
-export PATH="${HOME}/.gemini/bin:${HOME}/.local/bin:${HOME}/texlive/2024/bin/x86_64-linux:${PATH}"
+source "${SCRIPT_DIR}/runtime.sh"
+resume_tailor_configure_runtime
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
 
@@ -21,7 +22,7 @@ check_health() {
     curl -sf --max-time 2 "${HEALTH_URL}" >/dev/null 2>&1
     return $?
   fi
-  node -e "
+  "${NODE_BIN}" -e "
     fetch('${HEALTH_URL}', { signal: AbortSignal.timeout(1500) })
       .then((r) => process.exit(r.ok ? 0 : 1))
       .catch(() => process.exit(1));

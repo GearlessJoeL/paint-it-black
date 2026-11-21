@@ -123,6 +123,15 @@ if (args[0] === '--version') {
   console.log('2.1.0 (Claude Code)');
   process.exit(0);
 }
+if (args.includes('--input-format')) {
+  require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
+    const message = JSON.parse(line);
+    if (message.request?.subtype === 'initialize') console.log(JSON.stringify({
+      type: 'control_response', response: { subtype: 'success', request_id: message.request_id,
+        response: { models: [{ value: 'haiku', displayName: 'Live Haiku', supportedEffortLevels: [] }] } },
+    }));
+  });
+} else {
 const prompt = fs.readFileSync(0, 'utf8');
 const resumeIdx = args.indexOf('--resume');
 const resumed = resumeIdx !== -1 ? args[resumeIdx + 1] : '';
@@ -138,6 +147,7 @@ console.log(JSON.stringify({
     tailoredLatex: resumed ? '' : '\\\\documentclass{article}\\\\begin{document}OK\\\\end{document}',
   },
 }));
+}
 `;
   await fs.writeFile(fakeClaude, script, { mode: 0o755 });
 
@@ -171,6 +181,15 @@ if (args[0] === '--version') {
   console.log('codex-cli 0.45.0');
   process.exit(0);
 }
+if (args[0] === 'app-server') {
+  require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
+    const message = JSON.parse(line);
+    if (message.method === 'initialize') console.log(JSON.stringify({ id: message.id, result: {} }));
+    if (message.method === 'model/list') console.log(JSON.stringify({ id: message.id, result: {
+      data: [{ id: 'gpt-5.4', model: 'gpt-5.4', displayName: 'Live Codex', supportedReasoningEfforts: [], isDefault: true }], nextCursor: null,
+    } }));
+  });
+} else {
 const schemaPath = args[args.indexOf('--output-schema') + 1];
 const outPath = args[args.indexOf('-o') + 1];
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
@@ -182,6 +201,7 @@ const payload = {
   jobTitle: 'SWE',
 };
 fs.writeFileSync(outPath, JSON.stringify(payload), 'utf8');
+}
 `;
   await fs.writeFile(fakeCodex, script, { mode: 0o755 });
 

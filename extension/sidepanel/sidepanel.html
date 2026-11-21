@@ -4,15 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <title>Paint It Black — Resume Tailor</title>
+  <title>Paint It Black</title>
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <!-- Slim Header -->
-  <header class="app-header">
-    <div class="brand">
-      <img src="../icons/icon-48.png" alt="" width="18" height="18" class="brand-icon">
-      <h1>Paint It Black</h1>
+  <!-- Chrome supplies the title; this row contains only panel controls. -->
+  <header class="app-header" aria-label="Panel controls">
+    <div class="status-area">
       <button
         type="button"
         id="btn-status-dot"
@@ -219,6 +217,7 @@
           <select id="model-select" name="model">
             <option value="">Auto Fast (Flash Low)</option>
           </select>
+          <p id="model-discovery-hint" class="field-hint" hidden></p>
         </div>
       </div>
 
