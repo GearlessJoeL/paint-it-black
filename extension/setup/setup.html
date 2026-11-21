@@ -32,15 +32,18 @@
       <section aria-labelledby="backend-title">
         <div class="section-heading"><span class="step">2</span><h2 id="backend-title">Choose your AI backend</h2></div>
         <p class="hint">Used to turn a PDF into editable LaTeX and tailor your resume later. A LaTeX import is compiled locally without AI conversion.</p>
-        <div class="grid">
+        <div class="grid backend-grid">
           <div class="field"><label for="agent">AI backend</label><select id="agent"><option value="codex">Codex CLI</option><option value="claude">Claude Code CLI</option><option value="antigravity">Antigravity CLI</option><option value="api">API key / local endpoint</option></select></div>
-          <div class="field"><label for="model">Model</label><select id="model"><option value="">Backend default</option></select></div>
+          <div class="field" id="cli-model-field"><label for="model">Model</label><select id="model"><option value="">Backend default</option></select></div>
         </div>
         <p class="hint" id="backend-detail"></p>
         <div id="api-options" hidden>
-          <div class="grid">
-            <div class="field"><label for="api-provider">API provider</label><select id="api-provider"><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="anthropic">Anthropic</option><option value="gemini">Google Gemini</option><option value="local">Local endpoint</option></select></div>
-            <div class="field"><label for="custom-model">Custom model (optional)</label><input id="custom-model" type="text" autocomplete="off" spellcheck="false" placeholder="Use provider default"></div>
+          <div class="field"><label for="api-provider">API provider</label><select id="api-provider"><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="anthropic">Anthropic</option><option value="gemini">Google Gemini</option><option value="local">Local endpoint</option></select></div>
+          <div class="field">
+            <label for="api-model">Model</label>
+            <input id="api-model" type="text" list="api-model-suggestions" autocomplete="off" spellcheck="false" placeholder="Use provider default" aria-describedby="api-model-hint">
+            <datalist id="api-model-suggestions"></datalist>
+            <p class="hint" id="api-model-hint">Choose a suggestion or enter a model ID. Leave blank for the default.</p>
           </div>
           <div class="field"><label for="api-key">API key</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Your provider API key"><p class="hint">Saved only in this Chrome profile. Never saved with your resume. Leave blank to use the companion's existing provider credentials.</p></div>
           <div class="field"><label for="api-base-url">API base URL (optional)</label><input id="api-base-url" type="url" autocomplete="off" spellcheck="false" placeholder="Default provider endpoint"></div>

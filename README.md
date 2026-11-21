@@ -203,6 +203,9 @@ catalog cannot be loaded, Settings shows the discovery error and keeps **CLI
 default** available instead of displaying preset model names. Loading a catalog
 does not send a generation prompt.
 
+For **Direct API / Local URL**, choose your provider, then pick a suggestion or
+enter a model ID in the **Model** field. Leave it blank to use the provider default.
+
 *(Prefer running manually instead? Run `./scripts/start-server.sh`.)*
 
 ### Load the Chrome extension

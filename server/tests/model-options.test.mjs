@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getCliEffortOptions, getCliModelHint } from '../../extension/sidepanel/model-options.js';
+import { getCliEffortOptions, getCliModelHint, getSavedApiModel } from '../../extension/sidepanel/model-options.js';
+
+test('saved API model migration honors the custom override and preserves legacy selections', () => {
+  assert.equal(getSavedApiModel({ agentId: 'api', customModel: ' org/custom-model ', model: 'org/preset' }), 'org/custom-model');
+  assert.equal(getSavedApiModel({ agentId: 'api', customModel: '', model: 'org/previous-model' }), 'org/previous-model');
+  assert.equal(getSavedApiModel({ agentId: 'codex', model: 'cli-model' }), '');
+  assert.equal(getSavedApiModel({ agentId: 'codex', customModel: 'org/custom-model', model: 'cli-model' }), 'org/custom-model');
+});
 
 test('CLI effort choices follow discovered metadata and preserve supported selections', () => {
   const agent = { id: 'codex', models: [

@@ -1,9 +1,11 @@
-import { getCliEffortOptions, getCliModelHint } from '../sidepanel/model-options.js';
+import { getCliEffortOptions, getCliModelHint, getSavedApiModel } from '../sidepanel/model-options.js';
 
 const $ = (id) => document.getElementById(id);
-const ids = ['server-url', 'retry', 'connection-status', 'connection-detail', 'install-help', 'agent', 'model', 'backend-detail', 'api-options', 'api-provider', 'custom-model', 'api-key', 'api-base-url', 'effort', 'resume-file', 'sharing-notice', 'import', 'progress', 'error', 'success', 'success-detail', 'review-pdf', 'resume-folder', 'done', 'setup-form'];
+const ids = ['server-url', 'retry', 'connection-status', 'connection-detail', 'install-help', 'agent', 'model', 'cli-model-field', 'backend-detail', 'api-options', 'api-provider', 'api-model', 'api-model-suggestions', 'api-model-hint', 'api-key', 'api-base-url', 'effort', 'resume-file', 'sharing-notice', 'import', 'progress', 'error', 'success', 'success-detail', 'review-pdf', 'resume-folder', 'done', 'setup-form'];
 const els = Object.fromEntries(ids.map((id) => [id, $(id)]));
 const state = { settings: {}, health: null, ready: false, importing: false, generation: 0 };
+const apiDrafts = new Map();
+let apiDraftProvider = '';
 
 function serverUrl() {
   const url = new URL(els['server-url'].value.trim());
@@ -52,15 +54,24 @@ function updateNotice() {
   els.import.disabled = !state.ready || !file || state.importing;
 }
 
-function renderBackend({ preferredModel = els.model.value || state.settings.model || '' } = {}) {
+function renderBackend({ preferredModel = els.model.value || (els.agent.value === state.settings.agentId ? state.settings.model : '') || '' } = {}) {
   const agent = agentStatus();
   const isApi = els.agent.value === 'api';
+  els['cli-model-field'].hidden = isApi;
   els['api-options'].hidden = !isApi;
-  const models = isApi ? agent?.providers?.[els['api-provider'].value]?.models || [] : agent?.models || [];
+  els['api-base-url'].disabled = !isApi || state.importing;
+  els['backend-detail'].hidden = isApi && Boolean(state.health);
+  const provider = agent?.providers?.[els['api-provider'].value];
+  const apiModels = isApi ? provider?.models || [] : [];
+  els['api-model-suggestions'].replaceChildren(...apiModels.filter((entry) => entry.id).map((entry) => new Option('', entry.id)));
+  els['api-model-hint'].textContent = apiModels.length
+    ? 'Choose a suggestion or enter a model ID. Leave blank for the default.'
+    : 'Enter a model ID or leave blank to use the provider default.';
+  const models = isApi ? [] : agent?.models || [];
   els.model.replaceChildren(new Option('Backend default', ''), ...models.filter((entry) => entry.id && entry.id !== 'default' && entry.id !== 'cli-default').map((entry) => new Option(entry.label || entry.id, entry.id)));
   if ([...els.model.options].some((option) => option.value === preferredModel)) els.model.value = preferredModel;
   if (!state.health) els['backend-detail'].textContent = 'Connect the companion to discover installed agents and their models.';
-  else if (isApi) els['backend-detail'].textContent = 'Use your API key or an existing local model endpoint. You can enter a custom model ID.';
+  else if (isApi) els['backend-detail'].textContent = '';
   else if (!agent?.installed) els['backend-detail'].textContent = `${agent?.label || els.agent.selectedOptions[0]?.textContent || 'The selected CLI'} is not installed. Install and sign in to it, then reconnect, or choose API key / local endpoint.`;
   else if (!agent.authenticated) els['backend-detail'].textContent = agent.message || 'Sign in to the selected CLI in your terminal, then reconnect.';
   else els['backend-detail'].textContent = ['codex', 'claude'].includes(agent.id) ? getCliModelHint(agent) : `${agent.label || 'Selected backend'} is ready.`;
@@ -144,15 +155,16 @@ async function importResume(event) {
   els['success'].hidden = true;
   els.progress.textContent = format === 'pdf' ? 'Reading your PDF, converting it with the selected backend, and checking the one-page result… This can take a few minutes.' : 'Preparing any required LaTeX packages and checking your one-page resume…';
   try {
+    const isApi = els.agent.value === 'api';
     const choices = {
       serverUrl: serverUrl(), agentId: els.agent.value,
-      model: els.agent.value === 'api' ? els['custom-model'].value.trim() || els.model.value : els.model.value,
-      customModel: els['custom-model'].value.trim(), effort: els.effort.value,
+      model: isApi ? '' : els.model.value,
+      customModel: els['api-model'].value.trim(), effort: els.effort.value,
       apiProvider: els['api-provider'].value, apiKey: els['api-key'].value.trim(), apiBaseUrl: els['api-base-url'].value.trim(),
     };
     const result = await request('/api/setup/resume', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: file.name, format, contentBase64: encodeFile(new Uint8Array(await file.arrayBuffer())), ...choices }),
+      body: JSON.stringify({ filename: file.name, format, contentBase64: encodeFile(new Uint8Array(await file.arrayBuffer())), ...choices, model: isApi ? choices.customModel : choices.model }),
       signal: AbortSignal.timeout(12 * 60_000),
     });
     const current = await chrome.storage.local.get('settings');
@@ -170,6 +182,7 @@ async function importResume(event) {
   } finally {
     state.importing = false;
     for (const control of els['setup-form'].elements) control.disabled = false;
+    els['api-base-url'].disabled = els.agent.value !== 'api';
     els['server-url'].disabled = false;
     els.retry.disabled = false;
     renderEfforts();
@@ -188,7 +201,19 @@ els['server-url'].addEventListener('input', () => {
   renderBackend();
 });
 els.agent.addEventListener('change', () => renderBackend({ preferredModel: '' }));
-els['api-provider'].addEventListener('change', () => renderBackend({ preferredModel: '' }));
+els['api-provider'].addEventListener('change', () => {
+  apiDrafts.set(apiDraftProvider, {
+    model: els['api-model'].value,
+    key: els['api-key'].value,
+    baseUrl: els['api-base-url'].value,
+  });
+  apiDraftProvider = els['api-provider'].value;
+  const draft = apiDrafts.get(apiDraftProvider);
+  els['api-model'].value = draft?.model || '';
+  els['api-key'].value = draft?.key || '';
+  els['api-base-url'].value = draft?.baseUrl || '';
+  renderBackend();
+});
 els.model.addEventListener('change', renderEfforts);
 els['api-base-url'].addEventListener('input', updateNotice);
 els['resume-file'].addEventListener('change', updateNotice);
@@ -202,7 +227,8 @@ els.agent.value = state.settings.agentId || 'codex';
 if (!els.agent.value) els.agent.value = 'codex';
 els['api-provider'].value = state.settings.apiProvider || 'openai';
 if (!els['api-provider'].value) els['api-provider'].value = 'openai';
-els['custom-model'].value = state.settings.customModel || '';
+apiDraftProvider = els['api-provider'].value;
+els['api-model'].value = getSavedApiModel(state.settings);
 els['api-key'].value = state.settings.apiKey || '';
 els['api-base-url'].value = state.settings.apiBaseUrl || '';
 renderBackend();

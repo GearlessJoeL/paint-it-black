@@ -6,7 +6,7 @@ import {
   requestFolderPermission,
   writePdfToFolder,
 } from './folder-store.js';
-import { getCliEffortOptions, getCliModelHint } from './model-options.js';
+import { getCliEffortOptions, getCliModelHint, getSavedApiModel } from './model-options.js';
 
 const DEFAULT_SETTINGS = {
   serverUrl: 'http://127.0.0.1:8787',
@@ -111,6 +111,7 @@ const els = {
   settingsDialog: document.getElementById('settings-dialog'),
   settingsForm: document.getElementById('settings-form'),
   agentSelect: document.getElementById('agent-select'),
+  cliModelField: document.getElementById('cli-model-field'),
   modelSelect: document.getElementById('model-select'),
   modelDiscoveryHint: document.getElementById('model-discovery-hint'),
   apiSettingsGroup: document.getElementById('api-settings-group'),
@@ -119,7 +120,8 @@ const els = {
   apiKeyHint: document.getElementById('api-key-hint'),
   apiBaseUrlLabel: document.getElementById('api-base-url-label'),
   apiBaseUrlInput: document.getElementById('api-base-url-input'),
-  customModelInput: document.getElementById('custom-model-input'),
+  apiModelInput: document.getElementById('api-model-input'),
+  apiModelSuggestions: document.getElementById('api-model-suggestions'),
   settingEffort: document.getElementById('setting-effort'),
   selectedFolderName: document.getElementById('selected-folder-name'),
   btnPickFolder: document.getElementById('btn-pick-folder'),
@@ -517,10 +519,7 @@ function getActiveAgentDisplayName() {
 }
 
 function getEffectiveModel() {
-  if (state.settings.agentId === 'api' && state.settings.customModel?.trim()) {
-    return state.settings.customModel.trim();
-  }
-  return state.settings.model || '';
+  return state.settings.agentId === 'api' ? getSavedApiModel(state.settings) : state.settings.model || '';
 }
 
 const EFFORT_LABELS = {
@@ -538,7 +537,10 @@ function renderComposerPills() {
   }
   const agentName = getActiveAgentDisplayName();
   const effectiveModel = getEffectiveModel();
-  const activeModels = state.health?.agents?.find((a) => a.id === state.settings.agentId)?.models || [];
+  const activeAgent = state.health?.agents?.find((a) => a.id === state.settings.agentId);
+  const activeModels = (state.settings.agentId === 'api'
+    ? activeAgent?.providers?.[state.settings.apiProvider]?.models
+    : activeAgent?.models) || [];
   const matchedModel = activeModels.find((m) => m.id === effectiveModel);
   let modelLabel =
     effectiveModel === 'cli-default'
@@ -586,7 +588,7 @@ async function loadSettings() {
   els.apiProviderSelect.value = state.settings.apiProvider || 'openai';
   els.apiKeyInput.value = state.settings.apiKey || '';
   els.apiBaseUrlInput.value = state.settings.apiBaseUrl || '';
-  els.customModelInput.value = state.settings.customModel || '';
+  els.apiModelInput.value = getSavedApiModel(state.settings);
 
   renderComposerPills();
 }
@@ -683,11 +685,44 @@ function updateEffortOptionsForSelection(preferredEffort = els.settingEffort.val
     : 'low';
 }
 
+function renderApiModelOptions(apiAgent) {
+  const provider = els.apiProviderSelect.value || 'openai';
+  const providerMeta = apiAgent?.providers?.[provider];
+  const envHasKey = Boolean(apiAgent?.envKeys?.[provider]);
+  const envVarName = providerMeta?.envVar || `${provider.toUpperCase()}_API_KEY`;
+
+  els.apiModelSuggestions.replaceChildren(...(providerMeta?.models || []).map(
+    (model) => new Option(model.label || model.id, model.id),
+  ));
+
+  if (provider === 'local') {
+    els.apiKeyInput.placeholder = 'Optional for local endpoints';
+    els.apiKeyHint.textContent = 'Enter a key only if your local server requires one.';
+    els.apiBaseUrlLabel.textContent = 'Local server Base URL';
+    els.apiBaseUrlInput.placeholder = providerMeta?.baseUrl || 'http://127.0.0.1:11434/v1';
+  } else {
+    els.apiKeyInput.placeholder = envHasKey ? `Using server ${envVarName}` : 'Enter API key';
+    els.apiKeyHint.textContent = envHasKey
+      ? `Leave blank to use ${envVarName} from the companion.`
+      : 'Stored locally in Chrome and sent to the companion and selected provider.';
+    els.apiBaseUrlLabel.textContent = 'Base URL (optional)';
+    els.apiBaseUrlInput.placeholder = providerMeta?.baseUrl || 'Use provider default';
+  }
+}
+
 function renderModelOptionsForAgent(agentId, preferredModel = '', preferredEffort = state.settings.effort) {
   const agents = state.health?.agents || [];
-  const selectedAgent = agents.find((a) => a.id === agentId) || agents[0];
+  const selectedAgent = agents.find((a) => a.id === agentId);
   const isApi = agentId === 'api';
+  els.cliModelField.hidden = isApi;
   els.apiSettingsGroup.hidden = !isApi;
+  els.apiBaseUrlInput.disabled = !isApi;
+  if (isApi) {
+    renderApiModelOptions(selectedAgent);
+    updateEffortOptionsForSelection(preferredEffort);
+    return;
+  }
+
   els.modelDiscoveryHint.hidden = agentId !== 'codex' && agentId !== 'claude';
   els.modelDiscoveryHint.textContent = els.modelDiscoveryHint.hidden ? '' : getCliModelHint(selectedAgent);
 
@@ -721,49 +756,6 @@ function renderModelOptionsForAgent(agentId, preferredModel = '', preferredEffor
         normalizedModel = m[1];
         if (!normalizedEffort) normalizedEffort = m[2].toLowerCase();
       }
-    }
-  } else if (isApi) {
-    const provider = els.apiProviderSelect.value || state.settings.apiProvider || 'openai';
-    const providerMeta = selectedAgent?.providers?.[provider];
-    const providerModels = providerMeta?.models || selectedAgent?.models || [];
-    const envHasKey = Boolean(selectedAgent?.envKeys?.[provider]);
-    const isLocalProvider = provider === 'local';
-    const envVarName = providerMeta?.envVar || `${provider.toUpperCase()}_API_KEY`;
-
-    if (isLocalProvider) {
-      els.apiKeyInput.placeholder = 'Optional (leave blank for Ollama / LM Studio / vLLM)';
-      els.apiKeyHint.textContent =
-        'API key is optional for local OpenAI-compatible servers. Set your local Base URL & model.';
-      els.apiBaseUrlLabel.textContent = 'Local server Base URL';
-      els.apiBaseUrlInput.placeholder = providerMeta?.baseUrl || 'http://127.0.0.1:11434/v1';
-      els.customModelInput.placeholder = 'e.g. qwen2.5:14b or local model ID';
-    } else {
-      els.apiKeyInput.placeholder = envHasKey
-        ? `Using server ${envVarName} (paste to override)`
-        : provider === 'openrouter'
-          ? 'sk-or-v1-… (or set OPENROUTER_API_KEY on server)'
-          : `Paste API key (or set ${envVarName} on server)`;
-      els.apiKeyHint.textContent = envHasKey
-        ? `Server ${envVarName} detected for ${providerMeta?.label || provider}. Leave blank to use it.`
-        : 'Stored locally in Chrome; sent only to your local server and chosen API provider.';
-      els.apiBaseUrlLabel.textContent = 'Base URL (optional)';
-      els.apiBaseUrlInput.placeholder = providerMeta?.baseUrl || 'https://api.openai.com/v1';
-      els.customModelInput.placeholder =
-        provider === 'openrouter'
-          ? 'e.g. anthropic/claude-sonnet-4.5'
-          : `e.g. ${providerMeta?.defaultModel || 'gpt-4o-mini'}`;
-    }
-
-    const defOpt = document.createElement('option');
-    defOpt.value = '';
-    defOpt.textContent = `Provider default (${providerMeta?.defaultModel || 'auto'})`;
-    els.modelSelect.append(defOpt);
-
-    for (const model of providerModels) {
-      const opt = document.createElement('option');
-      opt.value = model.id;
-      opt.textContent = model.label;
-      els.modelSelect.append(opt);
     }
   } else {
     const defOpt = document.createElement('option');
@@ -2103,15 +2095,20 @@ function wireEvents() {
     els.historyDialog.returnValue = '';
   });
 
+  const apiDraftFields = [els.apiModelInput, els.apiKeyInput, els.apiBaseUrlInput];
+  const apiDrafts = new Map();
+  let editingProvider = '';
   const openSettings = () => {
     els.settingServerUrl.value = state.settings.serverUrl;
     els.settingEffort.value = state.settings.effort || '';
     els.settingFastMode.checked = Boolean(state.settings.fastMode);
     els.autoSaveAs.checked = Boolean(state.settings.autoSaveAs);
     els.apiProviderSelect.value = state.settings.apiProvider || 'openai';
+    editingProvider = els.apiProviderSelect.value;
+    apiDrafts.clear();
     els.apiKeyInput.value = state.settings.apiKey || '';
     els.apiBaseUrlInput.value = state.settings.apiBaseUrl || '';
-    els.customModelInput.value = state.settings.customModel || '';
+    els.apiModelInput.value = getSavedApiModel(state.settings);
     if ([...els.agentSelect.options].some((o) => o.value === state.settings.agentId)) {
       els.agentSelect.value = state.settings.agentId;
     }
@@ -2131,8 +2128,10 @@ function wireEvents() {
     updateEffortOptionsForSelection(els.settingEffort.value || state.settings.effort || 'low');
   });
   els.apiProviderSelect.addEventListener('change', () => {
-    // Clear previous provider's Base URL override so we don't send e.g. a local Ollama URL to OpenRouter
-    els.apiBaseUrlInput.value = '';
+    apiDrafts.set(editingProvider, apiDraftFields.map((field) => field.value));
+    editingProvider = els.apiProviderSelect.value;
+    const draft = apiDrafts.get(editingProvider);
+    apiDraftFields.forEach((field, index) => { field.value = draft?.[index] || ''; });
     renderModelOptionsForAgent('api', '', els.settingEffort.value || 'low');
   });
 
@@ -2142,13 +2141,15 @@ function wireEvents() {
   els.settingsDialog.addEventListener('close', async () => {
     const val = els.settingsDialog.returnValue;
     els.settingsDialog.returnValue = '';
+    apiDrafts.clear();
     if (val !== 'save') return;
 
+    const agentId = els.agentSelect.value || 'antigravity';
     await saveSettings({
       serverUrl: normalizeServerUrl(els.settingServerUrl.value) || DEFAULT_SETTINGS.serverUrl,
-      agentId: els.agentSelect.value || 'antigravity',
-      model: els.modelSelect.value || '',
-      customModel: els.customModelInput.value.trim(),
+      agentId,
+      model: agentId === 'api' ? '' : els.modelSelect.value || '',
+      customModel: els.apiModelInput.value.trim(),
       effort: els.settingEffort.value || '',
       apiProvider: els.apiProviderSelect.value || 'openai',
       apiKey: els.apiKeyInput.value.trim(),

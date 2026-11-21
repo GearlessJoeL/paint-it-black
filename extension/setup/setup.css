@@ -25,6 +25,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible { 
 .connection-row .field { flex:1; margin-bottom:0; }
 .connection-row button { height:44px; }
 .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.backend-grid:has(#cli-model-field[hidden]) { grid-template-columns:1fr; }
 .hint { font-size:12px; color:var(--muted); margin-bottom:16px; }
 .field .hint { margin:0; }
 #connection-detail { margin:12px 0 0; }

@@ -3,6 +3,11 @@ const EFFORT_LABELS = {
   xhigh: 'Extra High', max: 'Maximum', none: 'None',
 };
 
+export function getSavedApiModel(settings) {
+  return String(settings.customModel || '').trim() ||
+    (settings.agentId === 'api' ? String(settings.model || '').trim() : '');
+}
+
 export function getCliEffortOptions(agent, modelId, preferredEffort = '') {
   const models = agent?.models || [];
   const model = modelId && modelId !== 'cli-default'

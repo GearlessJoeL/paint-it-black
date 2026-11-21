@@ -199,7 +199,7 @@
             <option value="api">Direct API / Local URL</option>
           </select>
         </div>
-        <div class="field">
+        <div id="cli-model-field" class="field">
           <label for="model-select">Model</label>
           <select id="model-select" name="model">
             <option value="">Auto Fast (Flash Low)</option>
@@ -209,29 +209,32 @@
       </div>
 
       <div id="api-settings-group" class="api-settings-group" hidden>
-        <div class="field-grid">
-          <div class="field">
-            <label for="api-provider-select">API provider</label>
-            <select id="api-provider-select" name="apiProvider">
-              <option value="openai">OpenAI</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="local">Local URL (Ollama / LM Studio / vLLM)</option>
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="gemini">Google Gemini API</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="custom-model-input">Custom model (optional)</label>
-            <input
-              type="text"
-              id="custom-model-input"
-              name="customModel"
-              placeholder="e.g. gpt-4o-mini"
-              autocorrect="off"
-              autocapitalize="none"
-              spellcheck="false"
-            >
-          </div>
+        <div class="field">
+          <label for="api-provider-select">API provider</label>
+          <select id="api-provider-select" name="apiProvider">
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="local">Local URL (Ollama / LM Studio / vLLM)</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="gemini">Google Gemini API</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="api-model-input">Model</label>
+          <input
+            type="text"
+            id="api-model-input"
+            name="customModel"
+            list="api-model-suggestions"
+            aria-describedby="api-model-hint"
+            placeholder="Use provider default"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+          <datalist id="api-model-suggestions"></datalist>
+          <p id="api-model-hint" class="field-hint">Choose a suggestion or enter a model ID. Leave blank for the default.</p>
         </div>
         <div class="field">
           <label for="api-key-input">API key</label>
